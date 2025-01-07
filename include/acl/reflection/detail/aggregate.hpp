@@ -1,6 +1,6 @@
 #pragma once
 
-#include <acl/utils/string_literal.hpp>
+#include <acl/utility/string_literal.hpp>
 #include <cstddef>
 
 namespace acl::detail

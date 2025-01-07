@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include <acl/utils/config.hpp>
+#include <acl/utility/config.hpp>
 #include <cassert>
 #include <compare>
 #include <cstdint>

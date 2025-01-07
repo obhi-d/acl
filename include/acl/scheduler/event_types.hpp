@@ -2,7 +2,7 @@
 #pragma once
 
 #include "worker_context.hpp"
-#include <acl/utils/config.hpp>
+#include <acl/utility/config.hpp>
 #include <semaphore>
 
 namespace acl

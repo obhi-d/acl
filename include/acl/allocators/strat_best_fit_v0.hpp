@@ -2,7 +2,7 @@
 
 #include <acl/allocators/arena_options.hpp>
 #include <acl/allocators/detail/arena.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/type_traits.hpp>
 #include <optional>
 
 namespace acl::strat

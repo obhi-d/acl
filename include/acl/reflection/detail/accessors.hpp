@@ -1,8 +1,6 @@
+#pragma once
 
-export module acl.detail;
-
-import std;
-import <type_traits>;
+#include <type_traits>
 
 namespace acl::detail
 {

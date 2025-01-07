@@ -40,7 +40,7 @@ add_library(
     "${ACL_SOURCE_BUILD_DIR}/acl/dsl/yaml.cpp"
     "${ACL_SOURCE_BUILD_DIR}/acl/scheduler/scheduler.cpp"
     "${ACL_SOURCE_BUILD_DIR}/acl/scheduler/event_types.cpp"
-    "${ACL_SOURCE_BUILD_DIR}/acl/utils/string_utils.cpp"
+    "${ACL_SOURCE_BUILD_DIR}/acl/utility/string_utils.cpp"
     "${ACL_SOURCE_BUILD_DIR}/acl/allocators/coalescing_allocator.cpp"
     "${ACL_SOURCE_BUILD_DIR}/acl/allocators/coalescing_arena_allocator.cpp"
     "${ACL_SOURCE_BUILD_DIR}/acl/all.cpp"

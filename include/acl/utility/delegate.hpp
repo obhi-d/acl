@@ -1,8 +1,8 @@
 
 #pragma once
 
-#include <acl/utils/tuple.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/tuple.hpp>
+#include <acl/utility/type_traits.hpp>
 
 #include <cstddef>
 #include <cstdint>

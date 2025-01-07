@@ -2,8 +2,8 @@
 #pragma once
 
 #include "scheduler.hpp"
-#include <acl/utils/integer_range.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/integer_range.hpp>
+#include <acl/utility/type_traits.hpp>
 #include <functional>
 #include <iterator>
 #include <latch>

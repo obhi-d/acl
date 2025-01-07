@@ -2,8 +2,8 @@
 #pragma once
 #include "task.hpp"
 #include "worker.hpp"
-#include <acl/utils/config.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/config.hpp>
+#include <acl/utility/type_traits.hpp>
 #include <array>
 #include <thread>
 

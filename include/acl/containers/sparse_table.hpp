@@ -2,8 +2,8 @@
 
 #include "podvector.hpp"
 #include <acl/containers/indirection.hpp>
-#include <acl/utils/type_traits.hpp>
-#include <acl/utils/utils.hpp>
+#include <acl/utility/type_traits.hpp>
+#include <acl/utility/utils.hpp>
 #include <memory>
 
 namespace acl

@@ -7,7 +7,7 @@
 #include "worker_context.hpp"
 #include <acl/allocators/default_allocator.hpp>
 #include <acl/containers/basic_queue.hpp>
-#include <acl/utils/tagged_ptr.hpp>
+#include <acl/utility/tagged_ptr.hpp>
 #include <cstdint>
 #include <limits>
 #include <mutex>

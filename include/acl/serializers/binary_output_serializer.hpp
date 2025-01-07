@@ -1,9 +1,9 @@
 
 #pragma once
 
-#include <acl/utils/reflection.hpp>
-#include <acl/utils/reflection_utils.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/reflection.hpp>
+#include <acl/utility/reflection_utils.hpp>
+#include <acl/utility/type_traits.hpp>
 #include <cassert>
 #include <limits>
 #include <memory>

@@ -4,7 +4,7 @@
 #include "event_types.hpp"
 #include "promise_type.hpp"
 #include "worker_context.hpp"
-#include <acl/utils/delegate.hpp>
+#include <acl/utility/delegate.hpp>
 #include <cstddef>
 #include <tuple>
 

@@ -2,7 +2,7 @@
 #pragma once
 
 #include <acl/allocators/default_allocator.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/type_traits.hpp>
 #include <memory_resource>
 
 namespace acl

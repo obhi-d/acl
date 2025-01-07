@@ -3,7 +3,7 @@
 
 #include <acl/containers/indirection.hpp>
 #include <acl/ecs/entity.hpp>
-#include <acl/utils/vector_abstraction.hpp>
+#include <acl/utility/vector_abstraction.hpp>
 
 namespace acl::ecs
 {

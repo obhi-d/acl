@@ -5,14 +5,14 @@
 #include <acl/allocators/std_allocator_wrapper.hpp>
 #include <acl/containers/index_map.hpp>
 #include <acl/containers/sparse_table.hpp>
-#include <acl/utils/delegate.hpp>
-#include <acl/utils/error_codes.hpp>
-#include <acl/utils/export.hxx>
-#include <acl/utils/intrusive_ptr.hpp>
-#include <acl/utils/komihash.hpp>
-#include <acl/utils/tagged_ptr.hpp>
-#include <acl/utils/wyhash.hpp>
-#include <acl/utils/zip_view.hpp>
+#include <acl/utility/delegate.hpp>
+#include <acl/utility/error_codes.hpp>
+#include <acl/utility/export.hxx>
+#include <acl/utility/intrusive_ptr.hpp>
+#include <acl/utility/komihash.hpp>
+#include <acl/utility/tagged_ptr.hpp>
+#include <acl/utility/wyhash.hpp>
+#include <acl/utility/zip_view.hpp>
 #include <catch2/catch_all.hpp>
 #include <span>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <acl/utils/common.hpp>
+#include <acl/utility/common.hpp>
 #include <cstdint>
 
 namespace acl::detail

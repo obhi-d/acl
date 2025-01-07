@@ -3,8 +3,8 @@
 #include <acl/allocators/memory_stats.hpp>
 #include <acl/allocators/memory_tracker.hpp>
 #include <acl/allocators/std_allocator_wrapper.hpp>
-#include <acl/utils/common.hpp>
-#include <acl/utils/type_traits.hpp>
+#include <acl/utility/common.hpp>
+#include <acl/utility/type_traits.hpp>
 #include <new>
 
 namespace acl

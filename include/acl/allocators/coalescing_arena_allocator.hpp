@@ -4,7 +4,7 @@
 #include <acl/allocators/allocator.hpp>
 #include <acl/allocators/memory_stats.hpp>
 #include <acl/containers/vlist.hpp>
-#include <acl/utils/config.hpp>
+#include <acl/utility/config.hpp>
 #include <compare>
 #include <cstdint>
 #include <limits>

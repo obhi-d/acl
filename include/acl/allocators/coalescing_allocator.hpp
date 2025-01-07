@@ -1,7 +1,7 @@
 
 #pragma once
 
-#include <acl/utils/config.hpp>
+#include <acl/utility/config.hpp>
 #include <compare>
 #include <cstdint>
 #include <limits>
