@@ -2,6 +2,7 @@
 
 #include <acl/reflection/detail/accessors.hpp>
 #include <acl/reflection/transforms.hpp>
+#include <type_traits>
 #include <variant>
 
 namespace acl::detail
@@ -314,5 +315,8 @@ concept HasVariantTypeTransform = requires {
 
 template <typename Class>
 concept MonostateLike = std::same_as<Class, std::monostate>;
+
+template <typename Class>
+concept Aggregate = std::is_aggregate_v<Class>;
 
 } // namespace acl::detail
