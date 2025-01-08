@@ -43,6 +43,9 @@ constexpr std::uint32_t safety_offset = alignof(void*);
 namespace detail
 {
 
+template <typename T>
+constexpr bool always_false = false;
+
 inline void print_debug_info(std::string const& s)
 {
   /*ignored*/

@@ -18,7 +18,7 @@
  *
  * @section Concepts
  *  - ClassWithReflect: Requires a static @c reflect() method on the class.
- *  - BoundClass: Checks if a type has a non-empty tuple of reflections.
+ *  - ExplicitlyReflected: Checks if a type has a non-empty tuple of reflections.
  *  - InputSerializableClass / OutputSerializableClass: Requires compiler checks against
  *    user-defined serializers.
  *  - String- and number-related concepts: Determine if a type is @c BoolLike, @c IntegerLike,

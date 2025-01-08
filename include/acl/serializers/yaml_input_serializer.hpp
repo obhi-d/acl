@@ -111,7 +111,7 @@ public:
 
   void begin_key(std::string_view key) override
   {
-    if constexpr (detail::BoundClass<class_type>)
+    if constexpr (detail::ExplicitlyReflected<class_type>)
     {
       if constexpr (detail::StringMapValueType<class_type>)
       {

@@ -80,7 +80,7 @@ public:
   void write(Class const& obj) noexcept
   {
     // Ensure ordering with multiple matches
-    if constexpr (detail::BoundClass<Class>)
+    if constexpr (detail::ExplicitlyReflected<Class>)
     {
       write_bound_class(obj);
     }
@@ -158,7 +158,7 @@ public:
   }
 
 private:
-  template <detail::BoundClass Class>
+  template <detail::ExplicitlyReflected Class>
   void write_bound_class(Class const& obj) noexcept
   {
     get().begin_object();

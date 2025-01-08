@@ -44,7 +44,7 @@ public:
   void write(Class const& obj) noexcept
   {
     // Ensure ordering with multiple matches
-    if constexpr (detail::BoundClass<Class>)
+    if constexpr (detail::ExplicitlyReflected<Class>)
     {
       write_bound_class(obj);
     }
@@ -122,7 +122,7 @@ public:
   }
 
 private:
-  template <detail::BoundClass Class>
+  template <detail::ExplicitlyReflected Class>
   void write_bound_class(Class const& obj) noexcept
   {
     constexpr uint32_t h = type_hash<Class>();
@@ -354,7 +354,7 @@ struct empty_output_streamer
 
 template <typename Class>
 concept OutputSerializable =
- detail::BoundClass<Class> || detail::OutputSerializableClass<Class, detail::empty_output_streamer> ||
+ detail::ExplicitlyReflected<Class> || detail::OutputSerializableClass<Class, detail::empty_output_streamer> ||
  detail::TupleLike<Class> || detail::ContainerLike<Class> || detail::VariantLike<Class> ||
  detail::CastableToStringView<Class> || detail::CastableToString<Class> || detail::TransformToStringView<Class> ||
  detail::TransformToString<Class> || detail::ContainerIsStringLike<Class> || detail::BoolLike<Class> ||

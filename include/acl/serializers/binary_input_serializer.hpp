@@ -71,7 +71,7 @@ public:
       return false;
     }
     // Ensure ordering with multiple matches
-    if constexpr (detail::BoundClass<Class>)
+    if constexpr (detail::ExplicitlyReflected<Class>)
     {
       return read_bound_class(obj);
     }
@@ -138,7 +138,7 @@ public:
   }
 
 private:
-  template <detail::BoundClass Class>
+  template <detail::ExplicitlyReflected Class>
   auto read_bound_class(Class& obj) noexcept -> bool
   {
     uint32_t h = 0;
@@ -504,7 +504,7 @@ struct empty_input_streamer
 
 template <typename Class>
 concept InputSerializable =
- detail::BoundClass<Class> || detail::InputSerializableClass<Class, detail::empty_input_streamer> ||
+ detail::ExplicitlyReflected<Class> || detail::InputSerializableClass<Class, detail::empty_input_streamer> ||
  detail::TupleLike<Class> || detail::ContainerLike<Class> || detail::VariantLike<Class> ||
  detail::ConstructedFromStringView<Class> || detail::TransformFromString<Class> || detail::BoolLike<Class> ||
  detail::IntegerLike<Class> || detail::EnumLike<Class> || detail::FloatLike<Class> || detail::PointerLike<Class> ||

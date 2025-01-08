@@ -117,7 +117,7 @@ public:
       return false;
     }
     // Ensure ordering with multiple matches
-    if constexpr (detail::BoundClass<Class>)
+    if constexpr (detail::ExplicitlyReflected<Class>)
     {
       return read_bound_class(obj);
     }
@@ -188,7 +188,7 @@ public:
   }
 
 private:
-  template <detail::BoundClass Class>
+  template <detail::ExplicitlyReflected Class>
   auto read_bound_class(Class& obj) noexcept -> bool
   {
     int keys_read = 0;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <acl/reflection/detail/accessors.hpp>
-#include <acl/reflection/transforms.hpp>
+#include <acl/utility/transforms.hpp>
 #include <type_traits>
 #include <variant>
 
@@ -12,7 +12,7 @@ template <typename C>
 concept ClassWithReflect = requires { C::reflect(); };
 
 template <typename Class>
-concept BoundClass = (tuple_size<Class>) > 0;
+concept ExplicitlyReflected = (tuple_size<Class>) > 0;
 
 template <typename Class, typename Serializer>
 concept InputSerializableClass = requires(Class& o, Serializer s) { s >> o; };
@@ -288,8 +288,8 @@ concept LinearArrayLike =
    { c.size() } -> std::convertible_to<std::size_t>;
  } && std::is_standard_layout_v<typename Class::value_type> &&
  std::is_trivially_copyable_v<typename Class::value_type> &&
- std::has_unique_object_representations_v<typename Class::value_type> && !BoundClass<typename Class::value_type> &&
- !OutputSerializableClass<typename Class::value_type, Serializer> &&
+ std::has_unique_object_representations_v<typename Class::value_type> &&
+ !ExplicitlyReflected<typename Class::value_type> && !OutputSerializableClass<typename Class::value_type, Serializer> &&
  !InputSerializableClass<typename Class::value_type, Serializer>;
 
 template <typename T>

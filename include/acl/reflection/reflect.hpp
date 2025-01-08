@@ -3,6 +3,7 @@
 
 #include <acl/reflection/bind.hpp>
 #include <acl/reflection/detail/concepts.hpp>
+#include <acl/reflection/detail/field_helpers.hpp>
 
 namespace acl
 {
