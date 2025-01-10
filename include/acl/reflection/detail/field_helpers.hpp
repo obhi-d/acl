@@ -87,4 +87,14 @@ constexpr auto deduce_field_name() -> std::string_view
   return {};
 }
 
+template <Aggregate T>
+constexpr auto get_field_names() noexcept -> decltype(auto)
+{
+  return aggregate_lookup<T>(
+   [](auto&&... args) constexpr
+   {
+     return std::make_tuple(deduce_field_name<field_ref{args}>()...);
+   });
+}
+
 } // namespace acl::detail
