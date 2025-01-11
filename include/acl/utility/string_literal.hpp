@@ -13,9 +13,14 @@ struct string_literal
 {
   static constexpr std::size_t length = N - 1;
 
+  constexpr explicit string_literal(const char* str)
+  {
+    std::copy_n(str, length, static_cast<char*>(value_));
+  }
+
   constexpr string_literal(const char (&str)[N])
   {
-    std::copy_n(static_cast<char const*>(str), N, static_cast<char*>(value_));
+    std::copy_n(static_cast<char const*>(str), length, static_cast<char*>(value_));
   }
 
   static constexpr auto compute(char const* const s, std::size_t count) -> std::uint32_t

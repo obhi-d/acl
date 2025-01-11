@@ -1,38 +1,77 @@
 #pragma once
 
+#include <algorithm>
+#include <charconv>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 namespace acl
 {
 
-// Type to string conversion customization
 template <typename T>
-void from_string(T& ref, std::string_view) = delete;
-
-template <typename T>
-auto to_string(T const& ref) -> std::string = delete;
-
-template <typename T>
-auto to_string_view(T const& ref) -> std::string_view = delete;
+struct transform; // Specialization examples are given
 
 // Variant type transform
 template <typename T>
-auto to_variant_index(std::string_view ref) -> uint32_t = delete;
-template <typename T>
-auto from_variant_index(std::size_t ref) -> std::string_view = delete;
+struct index_transform
+{
+  static auto to_index(std::string_view ref) -> std::size_t
+  {
+    uint32_t index = 0;
+    std::from_chars(ref.data(), ref.data() + ref.size(), index);
+    return index;
+  }
+
+  static auto from_index(std::size_t ref) -> std::string
+  {
+    return std::to_string(ref);
+  }
+};
 
 template <>
-inline void from_string<std::string>(std::string& ref, std::string_view v)
+struct transform<std::string>
 {
-  ref = std::string(v);
-}
+  static auto to_string(std::string const& ref) -> std::string_view
+  {
+    return ref;
+  }
+
+  static auto from_string(std::string& ref, std::string_view v) -> void
+  {
+    ref = std::string(v);
+  }
+};
 
 template <>
-inline auto to_string_view<std::string>(std::string const& ref) -> std::string_view
+struct transform<std::unique_ptr<char[]>>
 {
-  return ref;
-}
+  static auto to_string(std::unique_ptr<char[]> const& ref) -> std::string_view
+  {
+    return {ref.get()};
+  }
+
+  static auto from_string(std::unique_ptr<char[]>& ref, std::string_view v) -> void
+  {
+    ref = std::make_unique<char[]>(v.size());
+    std::ranges::copy(v, ref.get());
+  }
+};
+
+template <>
+struct transform<std::string_view>
+{
+  static auto to_string(std::string_view const& ref) -> std::string_view
+  {
+    return ref;
+  }
+
+  static auto from_string(std::string_view& ref, std::string_view v) -> void
+  {
+    ref = v;
+  }
+};
 
 } // namespace acl

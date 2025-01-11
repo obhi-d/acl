@@ -8,11 +8,16 @@
 namespace acl::detail
 {
 
-template <typename C>
-concept ClassWithReflect = requires { C::reflect(); };
+template <template <typename...> class T, typename U>
+struct is_specialization_of : std::false_type
+{};
 
-template <typename Class>
-concept ExplicitlyReflected = (tuple_size<Class>) > 0;
+template <template <typename...> class T, typename... Us>
+struct is_specialization_of<T, T<Us...>> : std::true_type
+{};
+
+template <typename T>
+concept HasOptions = requires(T t) { typename T::options_t; };
 
 template <typename Class, typename Serializer>
 concept InputSerializableClass = requires(Class& o, Serializer s) { s >> o; };
@@ -111,19 +116,7 @@ concept ConvertibleToString =
                                           !CastableToString<T> && !ContainerIsStringLike<T>);
 
 template <typename T>
-concept TransformFromString = requires(T ref) {
-  { acl::from_string(ref, std::string_view()) } -> std::same_as<void>;
-};
-
-template <typename T>
-concept TransformToString = requires(T ref) {
-  { acl::to_string(ref) } -> std::same_as<std::string>;
-};
-
-template <typename T>
-concept TransformToStringView = requires(T ref) {
-  { acl::to_string_view(ref) } -> std::same_as<std::string_view>;
-};
+concept Transformable = is_specialization_of<acl::transform, T>::value;
 
 // Array
 template <typename Class>
@@ -188,9 +181,6 @@ concept HasCapacity = requires(Class const& c) {
 };
 
 template <typename Class>
-concept StringLike = TransformFromString<Class> && (TransformToString<Class> || TransformToStringView<Class>);
-
-template <typename Class>
 concept MapLike = requires(Class t) {
   typename Class::key_type;
   typename Class::mapped_type;
@@ -201,13 +191,10 @@ concept MapLike = requires(Class t) {
 };
 
 template <typename Class>
-concept StringMapLike = MapLike<Class> && StringLike<typename Class::key_type>;
+concept StringMapLike = MapLike<Class> && Transformable<typename Class::key_type>;
 
 template <typename Class>
-concept StringMapValueType = requires { typename Class::is_string_map_value_type; };
-
-template <typename Class>
-concept ComplexMapLike = MapLike<Class> && !StringLike<typename Class::key_type>;
+concept ComplexMapLike = MapLike<Class> && !Transformable<typename Class::key_type>;
 
 // Pointers
 template <typename Class>
@@ -225,12 +212,6 @@ concept IsBasicPointer =
 
 template <typename Class>
 concept PointerLike = IsBasicPointer<Class> || IsSmartPointer<Class>;
-
-// Variant
-template <typename Class>
-concept VariantLike = requires(Class o) {
-  { o.index() } -> std::same_as<std::size_t>;
-} && std::variant_size_v<Class> > 0;
 
 template <typename Class>
 concept ContainerHasArrayValueAssignable =
@@ -266,31 +247,12 @@ template <typename Class>
 concept ArrayLike = ContainerLike<Class> && (!MapLike<Class>);
 
 // Tuple
-template <class T, std::size_t N>
-concept HasTupleElement = requires(T t) {
-  typename std::tuple_element_t<N, std::remove_const_t<T>>;
-  { get<N>(t) } -> std::convertible_to<std::tuple_element_t<N, T> const&>;
-};
 template <typename Class>
-concept TupleLike = (!ArrayLike<Class>) && requires(Class t) {
-  typename std::tuple_size<Class>::type;
-  []<std::size_t... N>(std::index_sequence<N...>)
-  {
-    return (HasTupleElement<Class, N> && ...);
-  }(std::make_index_sequence<std::tuple_size_v<Class>>());
-};
+concept TupleLike = is_specialization_of<std::tuple, Class>::value;
 
-template <typename Class, typename Serializer>
-concept LinearArrayLike =
- requires(Class c) {
-   typename Class::value_type;
-   c.data();
-   { c.size() } -> std::convertible_to<std::size_t>;
- } && std::is_standard_layout_v<typename Class::value_type> &&
- std::is_trivially_copyable_v<typename Class::value_type> &&
- std::has_unique_object_representations_v<typename Class::value_type> &&
- !ExplicitlyReflected<typename Class::value_type> && !OutputSerializableClass<typename Class::value_type, Serializer> &&
- !InputSerializableClass<typename Class::value_type, Serializer>;
+// Variant
+template <typename Class>
+concept VariantLike = is_specialization_of<std::variant, Class>::value;
 
 template <typename T>
 concept DeclBase = requires {
@@ -306,12 +268,6 @@ concept HasTypeFieldName = requires(T t) { typename T::type_field_name_t; };
 
 template <typename T>
 concept HasValueFieldName = requires(T t) { typename T::value_field_name_t; };
-
-template <typename T>
-concept HasVariantTypeTransform = requires {
-  acl::to_variant_index<T>(std::string_view());
-  { acl::from_variant_index<T>(std::size_t()) } -> std::same_as<std::string_view>;
-};
 
 template <typename Class>
 concept MonostateLike = std::same_as<Class, std::monostate>;

@@ -5,26 +5,6 @@
 
 namespace acl::detail
 {
-template <typename T>
-  requires(NativeStringLike<T> || CastableToStringView<T>)
-static inline auto as_string(T const& val) -> std::string_view
-{
-  return std::string_view(val);
-}
-
-template <typename T>
-  requires(!NativeStringLike<T> && !CastableToStringView<T> && !TransformToString<T> && ConvertibleToString<T>)
-static inline auto as_string(T const& val) -> std::string
-{
-  return acl::to_string(val);
-}
-
-template <typename T>
-  requires(!NativeStringLike<T> && !CastableToStringView<T> && (TransformToString<T> || TransformToStringView<T>))
-static inline auto as_string(T const& val)
-{
-  return acl::to_string(val);
-}
 
 template <typename C, typename... Args>
   requires(HasValueType<C> && HasEmplace<C, container_value_type<C>> && !HasEmplaceBack<C, container_value_type<C>>)

@@ -71,15 +71,6 @@ struct free_setter_type<F>
   using value_t  = std::decay_t<R>;
 };
 
-// Concepts
-// Decl
-template <typename Class>
-using bind_type = decltype(reflect<Class>());
-
-// Utils
-template <typename Class>
-inline constexpr std::size_t tuple_size = tuple_size<bind_type<std::decay_t<Class>>>;
-
 template <typename Class>
 using array_value_type = std::decay_t<decltype(*std::begin(Class()))>;
 

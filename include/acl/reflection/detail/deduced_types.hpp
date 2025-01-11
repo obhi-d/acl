@@ -1,6 +1,6 @@
 #pragma once
 
-#include <acl/reflection/detail/concepts.hpp>
+#include <acl/reflection/detail/base_concepts.hpp>
 #include <acl/utility/string_literal.hpp>
 
 namespace acl::detail
