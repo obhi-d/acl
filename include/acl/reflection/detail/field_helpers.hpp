@@ -71,6 +71,12 @@ template <typename T, auto A>
   return std::source_location::current().function_name();
 }
 
+template <typename T>
+[[nodiscard]] constexpr auto function_name() noexcept -> std::string_view
+{
+  return std::source_location::current().function_name();
+}
+
 template <typename T, auto A>
 constexpr auto deduce_field_name() -> decltype(auto)
 {
@@ -78,22 +84,22 @@ constexpr auto deduce_field_name() -> decltype(auto)
 #if defined(__clang__)
   constexpr auto        beg_mem     = name.substr(name.find_last_of('.') + 1);
   constexpr auto        member_name = beg_mem.substr(0, beg_mem.find_first_of(']'));
-  constexpr std::size_t Length      = member_name.size();
+  constexpr std::size_t length      = member_name.size();
 
-  return string_literal<Length + 1>{member_name.data()};
+  return string_literal<length + 1>{member_name.data()};
 #elif defined(_MSC_VER)
   constexpr auto        beg_mem     = name.substr(name.find("->") + 2);
   constexpr auto        member_name = beg_mem.substr(0, beg_mem.find_first_of('>'));
-  constexpr std::size_t Length      = member_name.size();
+  constexpr std::size_t length      = member_name.size();
 
-  return string_literal<Length + 1>{member_name.data()};
+  return string_literal<length + 1>{member_name.data()};
 #elif defined(__GNUC__)
   constexpr auto        beg_mem     = name.substr(name.find(">.") + 2);
   constexpr auto        end_mem     = beg_mem.substr(0, beg_mem.find_first_of(')'));
   constexpr auto        member_name = end_mem.substr(end_mem.find_last_of(':') + 1);
-  constexpr std::size_t Length      = member_name.size();
+  constexpr std::size_t length      = member_name.size();
 
-  return string_literal<Length + 1>{member_name.data()};
+  return string_literal<length + 1>{member_name.data()};
 #else
   return name;
 #endif

@@ -27,9 +27,9 @@ namespace acl
  * Example usage:
  * ```
  * int x = 42;
- * optional_ref<int> opt(x);
- * if(opt) {
- *     // Use *opt or opt.get()
+ * optional_ref<int> cfg(x);
+ * if(cfg) {
+ *     // Use *cfg or cfg.get()
  * }
  * ```
  */
@@ -77,6 +77,28 @@ struct optional_ref
   [[nodiscard]] constexpr auto has_value() const noexcept -> bool
   {
     return value_ != nullptr;
+  }
+
+  [[nodiscard]] constexpr auto value() -> type&
+  {
+    assert(value_);
+    return *value_;
+  }
+
+  [[nodiscard]] constexpr auto value() const -> type const&
+  {
+    assert(value_);
+    return *value_;
+  }
+
+  [[nodiscard]] constexpr auto value_or(type& default_value) const -> type&
+  {
+    return value_ ? *value_ : default_value;
+  }
+
+  [[nodiscard]] constexpr auto value_or(type const& default_value) const -> type
+  {
+    return value_ ? *value_ : default_value;
   }
 
   constexpr void reset() const noexcept

@@ -2,10 +2,10 @@
 
 #include <acl/reflection/detail/deduced_types.hpp>
 
-namespace acl::opt
+namespace acl::cfg
 {
 /**
- * @brief Option to change the `key` field name in a map-like object
+ * @brief Config to change the `key` field name in a map-like object
  *
  * This template struct creates a type alias for a field name using a compile-time
  * string literal. It is used in reflection mechanisms to store and reference
@@ -19,11 +19,11 @@ namespace acl::opt
 template <string_literal Name>
 struct key_field_name
 {
-  using key_field_name_t = detail::field_name<Name>;
+  using key_field_name_t = acl::detail::field_name<Name>;
 };
 
 /**
- * @brief Option to change the `value` field name in a map-like object
+ * @brief Config to change the `value` field name in a map-like object
  *
  * This template struct creates a type alias for a field name using a compile-time
  * string literal. It is used in reflection mechanisms to store and reference
@@ -37,7 +37,7 @@ struct key_field_name
 template <string_literal Name>
 struct value_field_name
 {
-  using value_field_name_t = detail::field_name<Name>;
+  using value_field_name_t = acl::detail::field_name<Name>;
 };
 
-} // namespace acl::opt
+} // namespace acl::cfg

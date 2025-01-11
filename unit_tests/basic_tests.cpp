@@ -135,7 +135,7 @@ TEST_CASE("Validate general_allocator", "[general_allocator]")
 {
 
   using namespace acl;
-  using allocator_t   = default_allocator<acl::options<acl::opt::compute_stats>>;
+  using allocator_t   = default_allocator<acl::config<acl::cfg::compute_stats>>;
   using std_allocator = allocator_wrapper<int, allocator_t>;
   [[maybe_unused]] std_allocator allocator;
 
@@ -149,7 +149,7 @@ TEST_CASE("Validate general_allocator", "[general_allocator]")
 TEST_CASE("Validate tagged_ptr", "[tagged_ptr]")
 {
   using namespace acl;
-  detail::tagged_ptr<std::string> tagged_string;
+  acl::detail::tagged_ptr<std::string> tagged_string;
 
   std::string my_string = "This is my string";
   std::string copy      = my_string;
@@ -166,20 +166,20 @@ TEST_CASE("Validate tagged_ptr", "[tagged_ptr]")
   CHECK(tagged_string.get_ptr() == &my_string);
   CHECK(*tagged_string.get_ptr() == copy);
 
-  auto second = detail::tagged_ptr(&my_string, 2);
+  auto second = acl::detail::tagged_ptr(&my_string, 2);
   CHECK((tagged_string == second) == true);
 
   tagged_string.set(&my_string, tagged_string.get_next_tag());
   CHECK(tagged_string != second);
 
-  detail::tagged_ptr<std::void_t<>> null = nullptr;
+  acl::detail::tagged_ptr<std::void_t<>> null = nullptr;
   CHECK(!null);
 }
 
 TEST_CASE("Validate compressed_ptr", "[compressed_ptr]")
 {
   using namespace acl;
-  detail::compressed_ptr<std::string> tagged_string;
+  acl::detail::compressed_ptr<std::string> tagged_string;
 
   std::string my_string = "This is my string";
   std::string copy      = my_string;
@@ -196,13 +196,13 @@ TEST_CASE("Validate compressed_ptr", "[compressed_ptr]")
   CHECK(tagged_string.get_ptr() == &my_string);
   CHECK(*tagged_string.get_ptr() == copy);
 
-  auto second = detail::compressed_ptr(&my_string, 2);
+  auto second = acl::detail::compressed_ptr(&my_string, 2);
   CHECK((tagged_string == second) == true);
 
   tagged_string.set(&my_string, tagged_string.get_next_tag());
   CHECK(tagged_string != second);
 
-  detail::compressed_ptr<std::void_t<>> null = nullptr;
+  acl::detail::compressed_ptr<std::void_t<>> null = nullptr;
   CHECK(!null);
 }
 

@@ -18,8 +18,8 @@ concept Visitor = requires(T& visitor, Class& obj) {
   { visitor.end_object(obj) } -> std::same_as<void>;
   { visitor.begin_array(obj) } -> std::same_as<bool>;
   { visitor.end_array(obj) } -> std::same_as<void>;
-  { visitor.begin_field(std::string_view{}, false) } -> std::same_as<void>;
-  { visitor.end_field() } -> std::same_as<void>;
+  { visitor.begin_field(obj, std::string_view{}, false) } -> std::same_as<void>;
+  { visitor.end_field(obj) } -> std::same_as<void>;
   { visitor.is_null() } -> std::same_as<bool>;
   { visitor.null() } -> std::same_as<void>;
   {
@@ -28,10 +28,10 @@ concept Visitor = requires(T& visitor, Class& obj) {
   { visitor.write_string(std::string_view{}) } -> std::same_as<void>;
   { visitor.value(obj) } -> std::same_as<void>;
   {
-    visitor.for_each_map_entry([](std::string_view key) {})
+    visitor.for_each_map_entry(obj, [](std::string_view key) {})
   } -> std::same_as<void>;
   {
-    visitor.for_each_array_entry([]() {})
+    visitor.for_each_array_entry(obj, []() {})
   } -> std::same_as<void>;
 };
 

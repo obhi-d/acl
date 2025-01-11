@@ -99,7 +99,7 @@ constexpr auto log2(SizeType val) -> SizeType
 template <typename SizeType>
 constexpr auto hazard_idx(SizeType val, std::uint8_t spl) -> SizeType
 {
-  if constexpr (detail::debug)
+  if constexpr (acl::debug)
   {
     constexpr SizeType bit_count = 8;
     assert(val < (static_cast<SizeType>(1) << ((sizeof(SizeType) - 1) * 8)));
@@ -114,7 +114,7 @@ constexpr auto hazard_idx(SizeType val, std::uint8_t spl) -> SizeType
 template <typename SizeType>
 constexpr auto hazard_val(SizeType val) -> std::uint8_t
 {
-  if constexpr (detail::debug)
+  if constexpr (acl::debug)
   {
     constexpr SizeType bit_count = 8;
     return (val >> ((sizeof(SizeType) - 1) * bit_count));
@@ -131,7 +131,7 @@ constexpr auto index_val(SizeType val)
   constexpr SizeType bit_count = 8;
   constexpr SizeType one       = 1;
   constexpr SizeType mask      = (one << ((sizeof(SizeType) - one) * bit_count)) - 1;
-  if constexpr (detail::debug)
+  if constexpr (acl::debug)
   {
     return val & mask;
   }
@@ -144,7 +144,7 @@ constexpr auto index_val(SizeType val)
 template <typename SizeType>
 constexpr auto revise(SizeType val) -> SizeType
 {
-  if constexpr (detail::debug)
+  if constexpr (acl::debug)
   {
     return hazard_idx(index_val(val), (hazard_val(val) + 1));
   }
@@ -169,7 +169,7 @@ constexpr auto validate(SizeType val) -> SizeType
 template <typename SizeType>
 constexpr auto revise_invalidate(SizeType val) -> SizeType
 {
-  if constexpr (detail::debug)
+  if constexpr (acl::debug)
   {
     constexpr SizeType high_bit = 0x80;
     return (hazard_idx(index_val(val), (hazard_val(val) + 1) | high_bit));

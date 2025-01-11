@@ -6,7 +6,7 @@
 namespace acl
 {
 
-template <auto M, typename C = typename acl::opt::member<M>::class_type>
+template <auto M, typename C = typename acl::cfg::member<M>::class_type>
 class projected_view : public std::ranges::view_interface<projected_view<M, C>>
 {
 public:
@@ -117,6 +117,6 @@ private:
 };
 
 template <auto M>
-using projected_cview = projected_view<M, typename acl::opt::member<M>::class_type const>;
+using projected_cview = projected_view<M, typename acl::cfg::member<M>::class_type const>;
 
 } // namespace acl

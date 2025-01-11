@@ -27,7 +27,13 @@ struct string_literal
   {
     constexpr uint32_t prime_0 = 2166136261U;
     constexpr uint32_t prime_1 = 16777619U;
-    return (((count != 0U) ? compute(s, count - 1) : prime_0) ^ static_cast<std::uint8_t>(s[count])) * prime_1;
+
+    std::uint32_t hash = prime_0;
+    for (std::size_t i = 0; i <= count; ++i)
+    {
+      hash = (hash ^ static_cast<std::uint8_t>(s[i])) * prime_1;
+    }
+    return hash;
   }
 
   [[nodiscard]] constexpr auto hash() const -> std::uint32_t

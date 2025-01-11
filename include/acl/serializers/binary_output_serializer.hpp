@@ -1,13 +1,15 @@
 
 #pragma once
 
-#include <acl/utility/reflection.hpp>
-#include <acl/utility/reflection_utils.hpp>
+#include "acl/utility/transforms.hpp"
+#include <acl/reflection/detail/container_utils.hpp>
+#include <acl/reflection/detail/derived_concepts.hpp>
+#include <acl/reflection/detail/visitor_helpers.hpp>
+#include <acl/reflection/reflection.hpp>
 #include <acl/utility/type_traits.hpp>
 #include <cassert>
 #include <limits>
-#include <memory>
-#include <optional>
+#include <string_view>
 
 namespace acl
 {
@@ -21,344 +23,181 @@ template <BinaryOutputStream Serializer, std::endian Endian = std::endian::littl
 class binary_output_serializer
 {
 private:
-  std::reference_wrapper<Serializer> ser_;
+  enum class type : uint8_t
+  {
+    object,
+    array,
+    field
+  };
+
+  Serializer* serializer_ = nullptr;
+  type        type_       = type::object;
 
   static constexpr bool has_fast_path = (Endian == std::endian::native);
 
 public:
-  auto operator=(const binary_output_serializer&) -> binary_output_serializer& = default;
-  auto operator=(binary_output_serializer&&) -> binary_output_serializer&      = default;
-  binary_output_serializer(binary_output_serializer const&) noexcept           = default;
-  binary_output_serializer(binary_output_serializer&& i_other) noexcept : ser_(i_other.ser_) {}
-  binary_output_serializer(Serializer& ser) noexcept : ser_(ser) {}
+  using serializer_type = Serializer;
+  using serializer_tag  = writer_tag;
+
+  auto operator=(const binary_output_serializer&) -> binary_output_serializer&     = default;
+  auto operator=(binary_output_serializer&&) noexcept -> binary_output_serializer& = default;
+  binary_output_serializer(binary_output_serializer const&)                        = default;
+  binary_output_serializer(binary_output_serializer&& i_other) noexcept : serializer_(i_other.serializer_) {}
+  binary_output_serializer(Serializer& ser) : serializer_(&ser) {}
   ~binary_output_serializer() noexcept = default;
 
-  template <typename Class>
-  auto operator<<(Class& obj) -> auto&
+  binary_output_serializer(acl::detail::field_visitor_tag /*unused*/, binary_output_serializer& ser,
+                           std::string_view key)
+      : serializer_{ser.serializer_}, type_{type::field}
   {
-    write(obj);
-    return *this;
+    // No-op
+  }
+
+  binary_output_serializer(acl::detail::object_visitor_tag /*unused*/, binary_output_serializer& ser)
+      : serializer_{ser.serializer_}, type_{type::object}
+  {
+    // No-op
+  }
+
+  binary_output_serializer(acl::detail::array_visitor_tag /*unused*/, binary_output_serializer& ser)
+      : serializer_{ser.serializer_}, type_{type::array}
+  {
+    // No-op
   }
 
   template <typename Class>
-  void write(Class const& obj) noexcept
+  auto can_visit(Class const& obj) -> continue_token
   {
-    // Ensure ordering with multiple matches
-    if constexpr (detail::ExplicitlyReflected<Class>)
+    using type = std::decay_t<Class>;
+    if constexpr (acl::detail::ByteStreambleClass<Class, Serializer>)
     {
-      write_bound_class(obj);
+      return true;
     }
-    else if constexpr (detail::OutputSerializableClass<Class, Serializer>)
+    if (type_ == type::object)
     {
-      write_serializable(obj);
+      write_id(type_name<type>().hash());
     }
-    else if constexpr (detail::TransformToStringView<Class>)
-    {
-      write_string_view_transformable(obj);
-    }
-    else if constexpr (detail::TransformToString<Class>)
-    {
-      write_string_transformable(obj);
-    }
-    else if constexpr (detail::TupleLike<Class>)
-    {
-      write_tuple(obj);
-    }
-    else if constexpr (detail::ContainerLike<Class>)
-    {
-      write_container(obj);
-    }
-    else if constexpr (detail::VariantLike<Class>)
-    {
-      write_variant(obj);
-    }
-    else if constexpr (detail::CastableToStringView<Class>)
-    {
-      write_string_view_castable(obj);
-    }
-    else if constexpr (detail::CastableToString<Class>)
-    {
-      write_string_castable(obj);
-    }
-    else if constexpr (detail::ContainerIsStringLike<Class>)
-    {
-      write_string(obj);
-    }
-    else if constexpr (detail::BoolLike<Class>)
-    {
-      write_bool(obj);
-    }
-    else if constexpr (detail::IntegerLike<Class>)
-    {
-      write_integer(obj);
-    }
-    else if constexpr (detail::EnumLike<Class>)
-    {
-      write_enum(obj);
-    }
-    else if constexpr (detail::FloatLike<Class>)
-    {
-      write_float(obj);
-    }
-    else if constexpr (detail::PointerLike<Class>)
-    {
-      write_pointer(obj);
-    }
-    else if constexpr (detail::OptionalLike<Class>)
-    {
-      write_optional(obj);
-    }
-    else if constexpr (detail::MonostateLike<Class>)
-    {
-      write_monostate(obj);
-    }
-    else
-    {
-      []<bool Flag = false>()
-      {
-        static_assert(Flag, "This type is not serializable");
-      }();
-    }
+    return true;
   }
 
-private:
-  template <detail::ExplicitlyReflected Class>
-  void write_bound_class(Class const& obj) noexcept
+  template <acl::detail::OutputSerializableClass<Serializer> T>
+  void visit(T& obj)
   {
-    constexpr uint32_t h = type_hash<Class>();
-    write(h);
-    for_each_field(*this, obj);
+    (*serializer_) << obj;
   }
 
-  template <detail::OutputSerializableClass<Serializer> Class>
-  void write_serializable(Class& obj) noexcept
+  template <typename Class>
+  void for_each_field(Class const& obj, auto&& fn)
   {
-    constexpr uint32_t h = type_hash<Class>();
-    write(h);
-    get() << obj;
-  }
-
-  template <detail::TupleLike Class>
-  void write_tuple(Class const& obj) noexcept
-  {
-    constexpr auto tup_size = std::tuple_size_v<Class>;
-    static_assert(tup_size < std::numeric_limits<uint8_t>::max(),
-                  "Tuple is too big, please customize the serailization!");
-    auto size = static_cast<uint8_t>(tup_size);
-    write(size);
-
-    [this, &obj]<std::size_t... N>(std::index_sequence<N...>)
-    {
-      return (at<N>(obj), ...);
-    }(std::make_index_sequence<std::tuple_size_v<Class>>());
-  }
-
-  template <detail::ContainerLike Class>
-  void write_container(Class const& obj) noexcept
-  {
-    constexpr uint32_t h = type_hash<Class>();
-    write(h);
-    // Invalid type is unexpected
     auto count = static_cast<uint32_t>(obj.size());
-    write(count);
-    if constexpr (detail::LinearArrayLike<Class, Serializer> && has_fast_path)
+    visit(count);
+    for (auto const& [key, value] : obj)
     {
-      return get().write(obj.data(), sizeof(typename Class::value_type) * count);
-    }
-    else
-    {
-      for (auto const& value : obj)
-      {
-        write(value);
-      }
+      visit(acl::transform<std::decay_t<decltype(key)>>::to_string(key));
+      fn(value, *this);
     }
   }
 
-  template <detail::VariantLike Class>
-  void write_variant(Class const& obj) noexcept
+  template <acl::detail::ComplexMapLike Class>
+  void for_each_entry(Class const& obj, auto&& fn)
   {
-    // Invalid type is unexpected
-    auto idx = static_cast<uint8_t>(obj.index());
-    write(idx);
-    std::visit(
-     [this](auto const& arg)
-     {
-       write(arg);
-     },
-     obj);
+    auto count = static_cast<uint32_t>(obj.size());
+    visit(count);
+
+    using type = std::decay_t<Class>;
+
+    for (auto const& [key, value] : obj)
+    {
+      fn(key, value, *this);
+    }
   }
 
-  template <detail::CastableToStringView Class>
-  void write_string_view_castable(Class const& obj) noexcept
+  template <acl::detail::ArrayLike Class>
+  void for_each_entry(Class const& obj, auto&& fn)
   {
-    write_string(std::string_view(obj));
+    auto count = static_cast<uint32_t>(obj.size());
+    visit(count);
+
+    using type = std::decay_t<Class>;
+    if constexpr (acl::detail::LinearArrayLike<type, Serializer> && has_fast_path)
+    {
+      // NOLINTNEXTLINE
+      get().write(reinterpret_cast<std::byte const*>(obj.data()), sizeof(typename Class::value_type) * count);
+      return;
+    }
+
+    for (auto const& value : obj)
+    {
+      fn(value, *this);
+    }
   }
 
-  template <detail::CastableToString Class>
-  void write_string_castable(Class const& obj) noexcept
+  void visit(std::string_view str)
   {
-    write_string(std::string(obj));
+    auto count = static_cast<uint32_t>(str.length());
+    visit(count);
+    // NOLINTNEXTLINE
+    get().write(reinterpret_cast<std::byte const*>(str.data()), str.length());
   }
 
-  template <detail::TransformToString Class>
-  void write_string_transformable(Class const& obj) noexcept
+  template <acl::detail::BoolLike Class>
+  auto visit(Class& obj)
   {
-    write_string(acl::to_string(obj));
+    // NOLINTNEXTLINE
+    get().write(reinterpret_cast<std::byte*>(&obj), sizeof(obj));
   }
 
-  template <detail::TransformToStringView Class>
-  void write_string_view_transformable(Class const& obj) noexcept
-  {
-    write_string(acl::to_string_view(obj));
-  }
-
-  template <detail::BoolLike Class>
-  void write_bool(Class const& obj) noexcept
-  {
-    get().write(&obj, sizeof(obj));
-  }
-
-  template <detail::IntegerLike Class>
-  void write_integer(Class obj) noexcept
+  template <typename Class>
+    requires(acl::detail::IntegerLike<Class> || acl::detail::FloatLike<Class>)
+  auto visit(Class& obj) -> bool
   {
     if constexpr (has_fast_path)
     {
-      get().write(&obj, sizeof(obj));
+      // NOLINTNEXTLINE
+      return get().write(reinterpret_cast<std::byte*>(&obj), sizeof(obj));
     }
     else
     {
-      obj = detail::byteswap(obj);
-      get().write(&obj, sizeof(obj));
+      // NOLINTNEXTLINE
+      get().write(reinterpret_cast<std::byte*>(&obj), sizeof(obj));
+      obj = byteswap(obj);
     }
   }
 
-  template <detail::EnumLike Class>
-  void write_enum(Class obj) noexcept
+  void set_null()
   {
-    using type = std::underlying_type_t<Class>;
-    if constexpr (has_fast_path)
-    {
-      get().write(&obj, sizeof(obj));
-    }
-    else
-    {
-      auto data = static_cast<type>(obj);
-      data      = detail::byteswap(data);
-      get().write(&data, sizeof(data));
-    }
+    constexpr uint8_t null_value = 0x6f;
+    visit(null_value);
   }
 
-  void write_float(float obj) noexcept
+  void set_not_null()
   {
-    if constexpr (has_fast_path)
-    {
-      get().write(&obj, sizeof(obj));
-    }
-    else
-    {
-
-      union
-      {
-        float    val_;
-        uint32_t ref_;
-      } data    = {obj};
-      data.ref_ = detail::byteswap(data.ref_);
-      get().write(&data.ref_, sizeof(data.ref_));
-    }
-  }
-
-  void write_float(double obj) noexcept
-  {
-    if constexpr (has_fast_path)
-    {
-      get().write(&obj, sizeof(obj));
-    }
-    else
-    {
-      union
-      {
-        double   val_;
-        uint64_t ref_;
-      } data    = {obj};
-      data.ref_ = detail::byteswap(data.ref_);
-      get().write(&data.ref_, sizeof(data.ref_));
-    }
-  }
-
-  template <detail::PointerLike Class>
-  void write_pointer(Class const& obj) noexcept
-  {
-    bool is_null = !(bool)(obj);
-    write(is_null);
-    if (obj)
-    {
-      write(*obj);
-    }
-  }
-
-  template <detail::OptionalLike Class>
-  void write_optional(Class const& obj) noexcept
-  {
-    bool is_null = !(bool)obj;
-    write(is_null);
-    if (obj)
-    {
-      write(*obj);
-    }
-  }
-
-  template <detail::MonostateLike Class>
-  void write_monostate(Class const& obj) noexcept
-  {}
-
-public:
-  template <typename Class, typename Decl, std::size_t I>
-  void operator()(Class const& obj, Decl const& decl, std::integral_constant<std::size_t, I> /*unused*/) noexcept
-  {
-    write(decl.value(obj));
+    constexpr uint8_t not_null_value = 0x11;
+    visit(not_null_value);
   }
 
 private:
-  void write_string(std::string_view sv)
+  auto write_id(uint32_t id)
   {
-    auto length = static_cast<uint32_t>(sv.length());
-    write(length);
-    get().write(sv.data(), length);
+    visit(id);
   }
 
-  auto get() noexcept -> auto&
+  auto get() -> auto&
   {
-    return ser_.get();
+    assert(serializer_ != nullptr);
+    return *serializer_;
   }
 
-  auto get() const noexcept -> auto const&
+  auto get() const -> auto const&
   {
-    return ser_.get();
-  }
-
-  template <std::size_t N, typename Class>
-  void at(Class const& obj) noexcept
-  {
-    write(std::get<N>(obj));
+    assert(serializer_ != nullptr);
+    return *serializer_;
   }
 };
 
-namespace detail
-{
 struct empty_output_streamer
 {
   void write(std::byte* data, size_t s) {}
 };
-
-} // namespace detail
-
-template <typename Class>
-concept OutputSerializable =
- detail::ExplicitlyReflected<Class> || detail::OutputSerializableClass<Class, detail::empty_output_streamer> ||
- detail::TupleLike<Class> || detail::ContainerLike<Class> || detail::VariantLike<Class> ||
- detail::CastableToStringView<Class> || detail::CastableToString<Class> || detail::TransformToStringView<Class> ||
- detail::TransformToString<Class> || detail::ContainerIsStringLike<Class> || detail::BoolLike<Class> ||
- detail::IntegerLike<Class> || detail::EnumLike<Class> || detail::FloatLike<Class> || detail::PointerLike<Class> ||
- detail::OptionalLike<Class> || detail::MonostateLike<Class>;
 
 } // namespace acl

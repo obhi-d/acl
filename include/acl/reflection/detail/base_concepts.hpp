@@ -17,7 +17,7 @@ struct is_specialization_of<T, T<Us...>> : std::true_type
 {};
 
 template <typename T>
-concept HasOptions = requires(T t) { typename T::options_t; };
+concept HasConfig = requires(T t) { typename T::config_type; };
 
 template <typename Class, typename Serializer>
 concept InputSerializableClass = requires(Class& o, Serializer s) { s >> o; };
@@ -275,4 +275,6 @@ concept MonostateLike = std::same_as<Class, std::monostate>;
 template <typename Class>
 concept Aggregate = std::is_aggregate_v<Class>;
 
+template <typename Class>
+concept StringMapValueType = requires { typename Class::is_string_map_value_type; };
 } // namespace acl::detail

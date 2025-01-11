@@ -14,7 +14,7 @@ namespace acl
  * @tparam Name A compile-time string literal that will be used as the name of the binding
  * @tparam MPtr A member pointer (either member function pointer or member variable pointer)
  *
- * @requires MPtr must be a member pointer type (verified by detail::IsMemberPtr)
+ * @requires MPtr must be a member pointer type (verified by acl::detail::IsMemberPtr)
  *
  * @return A compile-time binding object that associates the name with the member pointer
  *
@@ -22,10 +22,10 @@ namespace acl
  */
 template <string_literal Name, auto MPtr>
 constexpr auto bind() noexcept
-  requires(detail::IsMemberPtr<MPtr>)
+  requires(acl::detail::IsMemberPtr<MPtr>)
 {
-  return detail::decl_member_ptr<Name, typename detail::member_ptr_type<MPtr>::class_t,
-                                 typename detail::member_ptr_type<MPtr>::member_t, MPtr>();
+  return acl::detail::decl_member_ptr<Name, typename acl::detail::member_ptr_type<MPtr>::class_t,
+                                      typename acl::detail::member_ptr_type<MPtr>::member_t, MPtr>();
 }
 
 /**
@@ -44,10 +44,10 @@ constexpr auto bind() noexcept
  */
 template <string_literal Name, auto Getter, auto Setter>
 constexpr auto bind() noexcept
-  requires(detail::IsMemberGetterSetter<Getter, Setter>)
+  requires(acl::detail::IsMemberGetterSetter<Getter, Setter>)
 {
-  return detail::decl_get_set<Name, typename detail::member_getter_type<Getter>::class_t,
-                              typename detail::member_getter_type<Getter>::return_t, Getter, Setter>();
+  return acl::detail::decl_get_set<Name, typename acl::detail::member_getter_type<Getter>::class_t,
+                                   typename acl::detail::member_getter_type<Getter>::return_t, Getter, Setter>();
 }
 
 /**
@@ -67,10 +67,10 @@ constexpr auto bind() noexcept
  */
 template <string_literal Name, auto Getter, auto Setter>
 constexpr auto bind() noexcept
-  requires(detail::IsFreeGetterSetter<Getter, Setter>)
+  requires(acl::detail::IsFreeGetterSetter<Getter, Setter>)
 {
-  return detail::decl_free_get_set<Name, typename detail::free_getter_type<Getter>::class_t,
-                                   typename detail::free_getter_type<Getter>::return_t, Getter, Setter>();
+  return acl::detail::decl_free_get_set<Name, typename acl::detail::free_getter_type<Getter>::class_t,
+                                        typename acl::detail::free_getter_type<Getter>::return_t, Getter, Setter>();
 }
 
 /**
@@ -90,10 +90,10 @@ constexpr auto bind() noexcept
  */
 template <string_literal Name, auto Getter, auto Setter>
 constexpr auto bind() noexcept
-  requires(detail::IsFreeGetterByValSetter<Getter, Setter>)
+  requires(acl::detail::IsFreeGetterByValSetter<Getter, Setter>)
 {
-  return detail::decl_free_get_set<Name, typename detail::getter_by_value_type<Getter>::class_t,
-                                   typename detail::getter_by_value_type<Getter>::return_t, Getter, Setter>();
+  return acl::detail::decl_free_get_set<Name, typename acl::detail::getter_by_value_type<Getter>::class_t,
+                                        typename acl::detail::getter_by_value_type<Getter>::return_t, Getter, Setter>();
 }
 
 /**
@@ -109,7 +109,7 @@ constexpr auto bind() noexcept
  * @note All arguments must satisfy the DeclBase concept
  * @note This operation is noexcept
  */
-template <detail::DeclBase... Args>
+template <acl::detail::DeclBase... Args>
 constexpr auto bind(Args&&... args) noexcept
 {
   return std::make_tuple(std::forward<Args>(args)...);

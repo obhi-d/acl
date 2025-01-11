@@ -31,7 +31,7 @@
 #endif
 
 #ifndef ACL_PRINT_DEBUG
-#define ACL_PRINT_DEBUG acl::detail::print_debug_info
+#define ACL_PRINT_DEBUG acl::print_debug_info
 #endif
 
 #define ACL_EXTERN extern "C"
@@ -40,17 +40,13 @@ namespace acl
 {
 constexpr std::uint32_t safety_offset = alignof(void*);
 
-namespace detail
-{
-
-template <typename T>
-constexpr bool always_false = false;
-
 inline void print_debug_info(std::string const& s)
 {
   /*ignored*/
 }
-
-} // namespace detail
-
+template <bool B, typename T>
+constexpr void typed_static_assert()
+{
+  static_assert(B, "static assert failed - check below ->");
+}
 } // namespace acl

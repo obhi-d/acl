@@ -42,26 +42,26 @@ constexpr std::uint32_t k_null_int_min = std::numeric_limits<SizeType>::min();
 template <auto Nullv>
 struct optional_val
 {
-  using vtype              = std::decay_t<decltype(Nullv)>;
+  using type               = std::decay_t<decltype(Nullv)>;
   constexpr optional_val() = default;
-  constexpr optional_val(vtype iv) noexcept : value_(iv) {}
+  constexpr optional_val(type iv) noexcept : value_(iv) {}
 
   constexpr operator bool() const noexcept
   {
     return value_ != Nullv;
   }
 
-  constexpr auto operator*() const noexcept -> vtype
+  constexpr auto operator*() const noexcept -> type
   {
     return value_;
   }
 
-  [[nodiscard]] constexpr auto get() const noexcept -> vtype
+  [[nodiscard]] constexpr auto get() const noexcept -> type
   {
     return value_;
   }
 
-  constexpr explicit operator vtype() const noexcept
+  constexpr explicit operator type() const noexcept
   {
     return value_;
   }
@@ -76,15 +76,25 @@ struct optional_val
     value_ = Nullv;
   }
 
-  [[nodiscard]] constexpr auto release() const noexcept -> vtype
+  [[nodiscard]] constexpr auto release() const noexcept -> type
   {
     auto r = value_;
     value_ = Nullv;
     return r;
   }
 
+  [[nodiscard]] constexpr auto value() const -> type
+  {
+    return value_;
+  }
+
+  [[nodiscard]] constexpr auto value_or(type default_value) const -> type
+  {
+    return value_ != Nullv ? value_ : default_value;
+  }
+
   constexpr auto operator<=>(const optional_val& other) const noexcept = default;
 
-  vtype value_ = Nullv;
+  type value_ = Nullv;
 };
 } // namespace acl

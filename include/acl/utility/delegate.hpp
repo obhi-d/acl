@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <acl/utility/common.hpp>
 #include <acl/utility/tuple.hpp>
 #include <acl/utility/type_traits.hpp>
 
@@ -161,10 +162,10 @@ class basic_delegate<SmallSize, Ret(Args...)>
   void construct(delegate_fn fn, F&& arg)
   {
     using DecayedF = std::decay_t<F>;
-    detail::typed_static_assert<sizeof(DecayedF) <= SmallSize && "Function/Lamda object too large for inline storage.",
-                                DecayedF>();
-    detail::typed_static_assert<
-     std::is_trivially_destructible_v<DecayedF> && "Capture type should be trivially destructible", DecayedF>();
+    typed_static_assert<sizeof(DecayedF) <= SmallSize && "Function/Lamda object too large for inline storage.",
+                        DecayedF>();
+    typed_static_assert<std::is_trivially_destructible_v<DecayedF> && "Capture type should be trivially destructible",
+                        DecayedF>();
 
     *(delegate_fn*)(buffer_) = fn;
     new (buffer_ + sizeof(delegate_fn)) DecayedF(std::forward<F>(arg));
@@ -175,10 +176,10 @@ class basic_delegate<SmallSize, Ret(Args...)>
   {
     using DecayedP       = std::decay_t<P>;
     using CompressedPair = compressed_pair<DecayedP>;
-    detail::typed_static_assert<
-     sizeof(CompressedPair) <= buffer_size && "Function/Lamda object too large for inline storage.", DecayedP>();
-    detail::typed_static_assert<std::is_trivially_destructible_v<DecayedP>,
-                                "Parameter type should be trivially destructible", DecayedP>();
+    typed_static_assert<sizeof(CompressedPair) <= buffer_size && "Function/Lamda object too large for inline storage.",
+                        DecayedP>();
+    typed_static_assert<std::is_trivially_destructible_v<DecayedP>, "Parameter type should be trivially destructible",
+                        DecayedP>();
 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     auto pair                       = reinterpret_cast<compressed_pair<P>*>(buffer_);
@@ -194,11 +195,11 @@ class basic_delegate<SmallSize, Ret(Args...)>
     using CompressedPair     = compressed_pair<DecayedP>;
     constexpr bool condition = (sizeof(CompressedPair) <= buffer_size &&
                                 CompressedPair::small_functor_size >= (sizeof(delegate_fn) + sizeof(DecayedF)));
-    detail::typed_static_assert<condition && "Function/Lamda object too large for inline storage.", DecayedP>();
-    detail::typed_static_assert<
-     std::is_trivially_destructible_v<DecayedF> && "Capture type should be trivially destructible", DecayedF>();
-    detail::typed_static_assert<
-     std::is_trivially_destructible_v<DecayedP> && "Parameter type should be trivially destructible", DecayedP>();
+    typed_static_assert<condition && "Function/Lamda object too large for inline storage.", DecayedP>();
+    typed_static_assert<std::is_trivially_destructible_v<DecayedF> && "Capture type should be trivially destructible",
+                        DecayedF>();
+    typed_static_assert<std::is_trivially_destructible_v<DecayedP> && "Parameter type should be trivially destructible",
+                        DecayedP>();
 
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
     auto pair                       = reinterpret_cast<compressed_pair<P>*>(buffer_);

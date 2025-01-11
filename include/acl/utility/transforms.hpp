@@ -39,9 +39,19 @@ struct transform<std::string>
     return ref;
   }
 
+  static auto to_string(std::string ref) -> std::string
+  {
+    return std::move(ref);
+  }
+
   static auto from_string(std::string& ref, std::string_view v) -> void
   {
     ref = std::string(v);
+  }
+
+  static auto from_string(std::string& ref, std::string&& v) -> void
+  {
+    ref = std::move(v);
   }
 };
 
