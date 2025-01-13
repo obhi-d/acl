@@ -2,6 +2,7 @@
 
 #include <acl/reflection/detail/accessors.hpp>
 #include <acl/utility/transforms.hpp>
+#include <concepts>
 #include <type_traits>
 #include <variant>
 
@@ -59,29 +60,13 @@ concept NativeStringLike =
  std::is_same_v<std::string, std::decay_t<T>> || std::is_same_v<char*, T> ||
  std::is_same_v<char const*, std::decay_t<T>>;
 
-template <typename T>
-concept NativeWStringLike =
- std::is_same_v<std::wstring, std::decay_t<T>> || std::is_same_v<std::wstring_view, std::decay_t<T>> ||
- std::is_same_v<std::wstring, std::decay_t<T>> || std::is_same_v<wchar_t*, T> ||
- std::is_same_v<wchar_t const*, std::decay_t<T>>;
-
 // String type check
 
 template <typename T>
-concept SignedIntLike =
- std::is_signed_v<std::decay_t<T>> && (std::is_integral_v<std::decay_t<T>> || std::is_enum_v<std::decay_t<T>>) &&
- (!std::is_same_v<std::decay_t<T>, bool>);
+concept IntegerLike = std::integral<std::decay_t<T>> && !std::is_same_v<std::decay_t<T>, bool>;
 
 template <typename T>
-concept UnsignedIntLike =
- std::is_unsigned_v<std::decay_t<T>> && (std::is_integral_v<std::decay_t<T>> || std::is_enum_v<std::decay_t<T>>) &&
- (!std::is_same_v<std::decay_t<T>, bool>);
-
-template <typename T>
-concept IntegerLike = SignedIntLike<T> || UnsignedIntLike<T>;
-
-template <typename T>
-concept EnumLike = std::is_enum_v<T>;
+concept EnumLike = std::is_enum_v<std::decay_t<T>>;
 
 // Float
 template <typename T>
@@ -93,24 +78,6 @@ concept BoolLike = std::is_same_v<std::decay_t<T>, bool>;
 
 template <typename T>
 concept ContainerIsStringLike = NativeStringLike<T>;
-
-template <typename T>
-concept WStringLike = NativeWStringLike<T>;
-
-template <typename T>
-concept NativeLike = BoolLike<T> || SignedIntLike<T> || UnsignedIntLike<T> || FloatLike<T> || ContainerIsStringLike<T>;
-
-template <typename T>
-concept CastableToStringView = requires(T t) { std::string_view(t); } && (!ContainerIsStringLike<T>);
-
-template <typename T>
-concept CastableToString =
- requires(T t) { std::string(t); } && (!CastableToStringView<T>) && (!ContainerIsStringLike<T>);
-
-template <typename T>
-concept ConvertibleToString =
- requires(T t) { std::to_string(t); } && (!FloatLike<T> && !BoolLike<T> && !SignedIntLike<T> && !UnsignedIntLike<T> &&
-                                          !CastableToString<T> && !ContainerIsStringLike<T>);
 
 template <typename T>
 concept Convertible = requires(T t) {

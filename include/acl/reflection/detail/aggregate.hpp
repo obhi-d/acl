@@ -81,7 +81,7 @@ template <class T, class Fn>
 }
 template <class T, class Fn>
 // NOLINTNEXTLINE
-[[nodiscard]] consteval auto aggregate_lookup(Fn&& fn, T&& obj) noexcept -> decltype(auto)
+[[nodiscard]] constexpr auto aggregate_lookup(Fn&& fn, T&& obj) noexcept -> decltype(auto)
 {
   using type = std::remove_cvref_t<T>;
   // Iterate forward so that compiler finds the match quickly

@@ -75,7 +75,8 @@ struct visitor_error : std::exception
     invalid_container,
     invalid_variant,
     invalid_variant_type,
-    invalid_aggregate
+    invalid_aggregate,
+    invalid_null_sentinel
   };
 
   explicit visitor_error(code errc) noexcept : code_(errc) {}
@@ -94,6 +95,8 @@ struct visitor_error : std::exception
       return "Invalid variant type";
     case invalid_aggregate:
       return "Invalid aggregate";
+    case invalid_null_sentinel:
+      return "Invalid null sentinel";
     default:
       return "Unknown visitor error";
     }

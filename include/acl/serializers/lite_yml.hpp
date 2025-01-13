@@ -4,6 +4,7 @@
 #include <acl/serializers/detail/lite_yml_parser_context.hpp>
 #include <acl/serializers/detail/lite_yml_writer_context.hpp>
 #include <acl/serializers/serializers.hpp>
+#include <acl/utility/transforms.hpp>
 
 namespace acl::yml
 {

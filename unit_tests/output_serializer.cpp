@@ -285,6 +285,12 @@ TEST_CASE("structured_output_serializer: VariantLike with custom index")
   }
 }
 
+template <typename T>
+concept RR = requires {
+  T(std::declval<std::string_view>());
+  (std::string_view) std::declval<T>();
+};
+
 TEST_CASE("structured_output_serializer: CastableToStringView")
 {
   struct ReflEx
@@ -304,6 +310,7 @@ TEST_CASE("structured_output_serializer: CastableToStringView")
     }
   };
 
+  static_assert(RR<ReflEx>, "Convert");
   auto example = ReflEx("reflex output");
 
   Stream stream;

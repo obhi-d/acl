@@ -111,7 +111,7 @@ public:
   template <acl::detail::OutputSerializableClass<Stream> T>
   void visit(T& obj)
   {
-    (*serializer_) >> obj;
+    (*serializer_) << obj;
   }
 
   template <typename Class>
@@ -130,27 +130,9 @@ public:
     }
   }
 
-  template <acl::detail::ComplexMapLike Class>
+  template <typename Class>
   void for_each_entry(Class const& obj, auto&& fn)
   {
-
-    using type = std::decay_t<Class>;
-    bool first = true;
-    for (auto const& [key, value] : obj)
-    {
-      if (!first)
-      {
-        get().next_array_entry();
-      }
-      first = false;
-      fn(key, value, *this);
-    }
-  }
-
-  template <acl::detail::ArrayLike Class>
-  void for_each_entry(Class const& obj, auto&& fn)
-  {
-
     bool first = true;
     for (auto const& value : obj)
     {
@@ -169,26 +151,27 @@ public:
   }
 
   template <acl::detail::BoolLike Class>
-  void visit(Class& obj)
+  void visit(Class const& obj)
   {
     get().as_bool(obj);
   }
 
-  template <acl::detail::IntegerLike Class>
-  void visit(Class& obj)
+  template <typename Class>
+    requires(acl::detail::IntegerLike<Class> || acl::detail::EnumLike<Class>)
+  void visit(Class const& obj)
   {
     if constexpr (std::is_unsigned_v<Class>)
     {
-      get().as_uint64(obj);
+      get().as_uint64(static_cast<uint64_t>(obj));
     }
     else
     {
-      get().as_int64(obj);
+      get().as_int64(static_cast<int64_t>(obj));
     }
   }
 
   template <acl::detail::FloatLike Class>
-  void visit(Class& obj)
+  void visit(Class const& obj)
   {
     get().as_double(obj);
   }

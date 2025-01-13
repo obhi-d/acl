@@ -4,7 +4,6 @@
 #include <acl/reflection/detail/aggregate.hpp>
 #include <acl/reflection/detail/base_concepts.hpp>
 #include <acl/reflection/detail/container_utils.hpp>
-#include <acl/reflection/detail/map_value_type.hpp>
 #include <acl/reflection/visitor.hpp>
 #include <acl/utility/config.hpp>
 #include <acl/utility/transforms.hpp>
@@ -50,6 +49,30 @@ void process_field(Class& obj, Visitor& visitor, Decl const& decl)
   else if constexpr (is_writer<Visitor>)
   {
     visit(decl.value(obj), field_visitor);
+  }
+}
+
+template <typename Class, typename Visitor, typename Ref>
+void process_field(Class& obj, Ref& ref, Visitor& visitor, std::string_view name)
+{
+  using value_t = std::decay_t<Ref>;
+
+  Visitor field_visitor{field_visitor_tag{}, visitor, name};
+
+  if (!field_visitor.can_visit(obj))
+  {
+    return;
+  }
+
+  if constexpr (is_reader<Visitor>)
+  {
+    value_t load;
+    visit(load, field_visitor);
+    ref = std::move(load);
+  }
+  else if constexpr (is_writer<Visitor>)
+  {
+    visit(ref, field_visitor);
   }
 }
 
@@ -132,63 +155,12 @@ void visit_tuple(Class& obj, Visitor& visitor)
    obj);
 }
 
-template <acl::detail::StringMapLike Class, typename Visitor>
-  requires(is_reader<Visitor>)
-void visit_container(Class& obj, Visitor& visitor)
-{
-  using key_type    = std::decay_t<typename Class::key_type>;
-  using mapped_type = std::decay_t<typename Class::mapped_type>;
-
-  Visitor object_visitor{object_visitor_tag{}, visitor};
-
-  if (!object_visitor.can_visit(obj))
-  {
-    throw visitor_error(visitor_error::invalid_container);
-  }
-
-  size_t index = 0;
-  object_visitor.for_each_field(obj,
-                                [&](std::string_view skey, auto& field_visitor)
-                                {
-                                  mapped_type stream_val;
-                                  key_type    key;
-
-                                  visit(stream_val, field_visitor);
-                                  acl::convert<mapped_type>::from_string(stream_val, skey);
-                                  acl::detail::emplace(obj, index++, std::move(key), std::move(stream_val));
-                                });
-
-  post_read(obj);
-}
-
-template <acl::detail::StringMapLike Class, typename Visitor>
-  requires(is_writer<Visitor>)
-void visit_container(Class const& obj, Visitor& visitor)
-{
-  using key_type    = std::decay_t<typename Class::key_type>;
-  using mapped_type = std::decay_t<typename Class::mapped_type>;
-
-  Visitor object_visitor{object_visitor_tag{}, visitor};
-
-  if (!object_visitor.can_visit(obj))
-  {
-    throw visitor_error(visitor_error::invalid_container);
-  }
-
-  object_visitor.for_each_field(obj,
-                                [&](mapped_type const& entry, auto& field_visitor)
-                                {
-                                  visit(entry, field_visitor);
-                                });
-}
-
 template <acl::detail::MapLike Class, typename Visitor>
   requires(is_reader<Visitor>)
 void visit_container(Class& obj, Visitor& visitor)
 {
-  using key_type     = std::decay_t<typename Class::key_type>;
-  using mapped_type  = std::decay_t<typename Class::mapped_type>;
-  using options_type = typename Visitor::config_type;
+  using key_type    = std::decay_t<typename Class::key_type>;
+  using mapped_type = std::decay_t<typename Class::mapped_type>;
 
   Visitor array_visitor{array_visitor_tag{}, visitor};
 
@@ -201,14 +173,11 @@ void visit_container(Class& obj, Visitor& visitor)
   array_visitor.for_each_entry(obj,
                                [&](auto& field_visitor)
                                {
-                                 std::pair<key_type, mapped_type>                                 value;
-                                 mapped_type                                                      value;
-                                 acl::detail::map_value_type<key_type, mapped_type, options_type> stream_val{&key,
-                                                                                                             &value};
+                                 std::pair<key_type, mapped_type> value;
 
-                                 visit(stream_val, field_visitor);
+                                 visit(value, field_visitor);
 
-                                 acl::detail::emplace(obj, index++, std::move(key), std::move(value));
+                                 acl::detail::emplace(obj, index++, std::move(value.first), std::move(value.second));
                                });
 }
 
@@ -216,9 +185,8 @@ template <acl::detail::MapLike Class, typename Visitor>
   requires(is_writer<Visitor>)
 void visit_container(Class const& obj, Visitor& visitor)
 {
-  using key_type     = std::decay_t<typename Class::key_type>;
-  using mapped_type  = std::decay_t<typename Class::mapped_type>;
-  using options_type = typename Visitor::config_type;
+  using key_type    = std::decay_t<typename Class::key_type>;
+  using mapped_type = std::decay_t<typename Class::mapped_type>;
 
   Visitor array_visitor{array_visitor_tag{}, visitor};
 
@@ -227,14 +195,11 @@ void visit_container(Class const& obj, Visitor& visitor)
     throw visitor_error(visitor_error::invalid_container);
   }
 
-  array_visitor.for_each_entry(
-   obj,
-   [&](key_type const& key, mapped_type const& value, auto& field_visitor)
-   {
-     acl::detail::map_value_type<key_type const, mapped_type const, options_type> stream_val{&key, &value};
-
-     visit(stream_val, field_visitor);
-   });
+  array_visitor.for_each_entry(obj,
+                               [&](auto const& value, auto& field_visitor)
+                               {
+                                 visit(value, field_visitor);
+                               });
 }
 
 template <acl::detail::ArrayLike Class, typename Visitor>
@@ -263,7 +228,7 @@ void visit_container(Class& obj, Visitor& visitor)
 }
 template <acl::detail::ArrayLike Class, typename Visitor>
   requires(is_writer<Visitor>)
-void visit_container(Class& obj, Visitor& visitor)
+void visit_container(Class const& obj, Visitor& visitor)
 {
   using value_type = std::decay_t<typename Class::value_type>;
 
@@ -296,55 +261,107 @@ void visit_variant(Class& obj, Visitor& visitor)
     throw visitor_error(visitor_error::invalid_variant);
   }
 
-  Visitor field_visitor{field_visitor_tag{}, object_visitor};
-
-  auto key = Visitor::transform_type::transform(field_visitor.key());
-
-  auto           index        = index_transform<type>::to_index(key);
-  constexpr auto variant_size = std::variant_size_v<type>;
-  if (index >= variant_size)
+  constexpr auto variant_size  = std::variant_size_v<type>;
+  uint8_t        variant_index = 0;
   {
-    throw visitor_error(visitor_error::invalid_variant_type);
+    Visitor field_visitor{field_visitor_tag{}, object_visitor, Visitor::transform_type::transform("type")};
+
+    if (!field_visitor.can_visit(obj))
+    {
+      throw visitor_error(visitor_error::invalid_variant_type);
+    }
+
+    if constexpr (requires { typename Visitor::binary; })
+    {
+      visit(variant_index, field_visitor);
+    }
+    else
+    {
+      std::string variant_index_str;
+      visit(variant_index_str, field_visitor);
+
+      variant_index = static_cast<uint8_t>(index_transform<type>::to_index(variant_index_str));
+    }
+
+    if (variant_index >= variant_size)
+    {
+      throw visitor_error(visitor_error::invalid_variant_type);
+    }
   }
 
-  auto emplace_item = [&]<std::size_t I>(std::integral_constant<std::size_t, I>)
   {
-    std::variant_alternative_t<I, Class> value;
-    visit(value, field_visitor);
-    obj = std::move(value);
-  };
+    Visitor field_visitor{field_visitor_tag{}, object_visitor, Visitor::transform_type::transform("value")};
 
-  [&]<std::size_t... I>(std::index_sequence<I...>)
-  {
-    (((I == index ? (emplace_item(std::integral_constant<std::size_t, I>()), true) : false) || ...), false);
-  }(std::make_index_sequence<variant_size>{});
+    if (!field_visitor.can_visit(obj))
+    {
+      throw visitor_error(visitor_error::invalid_variant);
+    }
 
-  post_read(obj);
+    auto emplace_item = [&]<std::size_t I>(std::integral_constant<std::size_t, I>)
+    {
+      std::variant_alternative_t<I, Class> value;
+      visit(value, field_visitor);
+      obj = std::move(value);
+    };
+
+    [&]<std::size_t... I>(std::index_sequence<I...>)
+    {
+      (((I == variant_index ? (emplace_item(std::integral_constant<std::size_t, I>()), true) : false) || ...), false);
+    }(std::make_index_sequence<variant_size>{});
+
+    post_read(obj);
+  }
 }
 
 template <typename Class, typename Visitor>
   requires(is_writer<Visitor>)
-void visit_variant(Class& obj, Visitor& visitor)
+void visit_variant(Class const& obj, Visitor& visitor)
 {
   using type = std::decay_t<Class>;
   Visitor object_visitor{object_visitor_tag{}, visitor};
 
   if (!object_visitor.can_visit(obj))
   {
-    throw visitor_error(visitor_error::invalid_variant);
+    return;
   }
 
-  auto index = obj.index();
-  auto key   = index_transform<type>::from_index(index);
-  // TODO FIX THIS
-  Visitor field_visitor{field_visitor_tag{}, object_visitor, Visitor::transform_type::transform(key)};
+  auto variant_index = static_cast<uint8_t>(obj.index());
+  {
+    Visitor field_visitor{field_visitor_tag{}, object_visitor, Visitor::transform_type::transform("type")};
 
-  std::visit(
-   [&](auto const& value)
-   {
-     visit(value, field_visitor);
-   },
-   obj);
+    if (!field_visitor.can_visit(obj))
+    {
+      throw visitor_error(visitor_error::invalid_variant_type);
+    }
+
+    if constexpr (requires { typename Visitor::binary; })
+    {
+      visit(variant_index, field_visitor);
+    }
+    else
+    {
+      auto variant_index_str = index_transform<type>::from_index(variant_index);
+      visit(variant_index_str, field_visitor);
+    }
+  }
+
+  {
+    Visitor field_visitor{field_visitor_tag{}, object_visitor, Visitor::transform_type::transform("value")};
+
+    if (!field_visitor.can_visit(obj))
+    {
+      throw visitor_error(visitor_error::invalid_variant);
+    }
+
+    std::visit(
+     [&](auto const& value)
+     {
+       visit(value, field_visitor);
+     },
+     obj);
+
+    post_read(obj);
+  }
 }
 
 template <typename Class, typename Visitor>
@@ -356,7 +373,7 @@ void visit_value(Class& obj, Visitor& visitor)
 template <typename Class, typename Visitor>
 void visit_enum(Class& obj, Visitor& visitor)
 {
-  visitor.visit(static_cast<std::underlying_type_t<std::decay_t<Class>>>(obj));
+  visitor.visit(obj);
 }
 
 template <typename Class, typename Visitor>
@@ -378,9 +395,17 @@ void visit_pointer(Class& obj, Visitor& visitor)
     {
       obj = std::make_shared<pvalue_type>();
     }
+    else if constexpr (std::is_same_v<class_type, std::unique_ptr<pvalue_type>>)
+    {
+      obj = std::make_unique<pvalue_type>();
+    }
+    else if constexpr (std::is_same_v<class_type, std::unique_ptr<pvalue_type[]>>)
+    {
+      obj = std::make_unique<pvalue_type[]>(1);
+    }
     else
     {
-      obj = std::make_unique<std::decay_t<Class>>();
+      static_assert(always_false<Class>, "Unsupported pointer type");
     }
   }
 
@@ -389,7 +414,7 @@ void visit_pointer(Class& obj, Visitor& visitor)
 
 template <typename Class, typename Visitor>
   requires(is_writer<Visitor>)
-void visit_pointer(Class& obj, Visitor& visitor)
+void visit_pointer(Class const& obj, Visitor& visitor)
 {
   if (!obj)
   {
@@ -411,8 +436,6 @@ void visit_optional(Class& obj, Visitor& visitor)
     return;
   }
 
-  visitor.set_not_null();
-
   if (!obj)
   {
     obj.emplace();
@@ -423,7 +446,7 @@ void visit_optional(Class& obj, Visitor& visitor)
 
 template <typename Class, typename Visitor>
   requires(is_writer<Visitor>)
-void visit_optional(Class& obj, Visitor& visitor)
+void visit_optional(Class const& obj, Visitor& visitor)
 {
   if (!obj)
   {
@@ -455,11 +478,10 @@ void visit_aggregate(Class& obj, Visitor& visitor)
   }
 
   constexpr auto field_names = get_field_names<Class>();
-  constexpr auto refs        = get_field_refs(obj);
 
   [&]<std::size_t... I>(std::index_sequence<I...>)
   {
-    ((process_field(obj, std::get<I>(refs), object_visitor, std::get<I>(field_names))), ...);
+    ((process_field(obj, get_field_ref<I>(obj), object_visitor, std::get<I>(field_names))), ...);
   }(std::make_index_sequence<std::tuple_size_v<decltype(field_names)>>());
 
   if constexpr (is_reader<Visitor>)

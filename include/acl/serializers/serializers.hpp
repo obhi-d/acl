@@ -4,6 +4,7 @@
 #include <acl/serializers/detail/binary_output_serializer.hpp>
 #include <acl/serializers/detail/structured_input_serializer.hpp>
 #include <acl/serializers/detail/structured_output_serializer.hpp>
+#include <acl/utility/transforms.hpp>
 
 namespace acl
 {

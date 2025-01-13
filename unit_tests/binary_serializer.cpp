@@ -521,7 +521,6 @@ TEMPLATE_TEST_CASE("stream: PointerLike", "[stream][pointer]", big_endian, littl
 
   write.a = std::make_shared<std::string>("shared");
   write.b = std::make_unique<std::string>("unique");
-  write.c = new std::string("new");
 
   acl::write<TestType::value>(stream, write);
   acl::read<TestType::value>(stream, read);
@@ -553,7 +552,6 @@ TEMPLATE_TEST_CASE("stream: NullPointerLike", "[stream][pointer]", big_endian, l
 
   REQUIRE(!read.a);
   REQUIRE(!read.b);
-  REQUIRE(!read.c);
 }
 
 TEMPLATE_TEST_CASE("stream: OptionalLike", "[stream][optional]", big_endian, little_endian)

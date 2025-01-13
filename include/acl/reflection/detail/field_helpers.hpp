@@ -124,7 +124,7 @@ constexpr auto get_field_refs(T& ref) noexcept -> decltype(auto)
   return aggregate_lookup(
    [](auto&&... args) constexpr -> decltype(auto)
    {
-     return std::make_tuple(field_ref{args}...);
+     return std::make_tuple(args...);
    },
    ref);
 }

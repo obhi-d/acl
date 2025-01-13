@@ -34,17 +34,48 @@ struct index_transform
   }
 };
 
+template <typename T>
+  requires(requires {
+    T(std::declval<std::string_view>());
+    (std::string_view) std::declval<T const>();
+  })
+struct convert<T>
+{
+  static auto to_string(T const& ref) -> std::string_view
+  {
+    return (std::string_view)ref;
+  }
+
+  static auto from_string(T& ref, std::string_view v) -> void
+  {
+    ref = T(v);
+  }
+};
+
+template <typename T>
+  requires(requires {
+    T(std::declval<std::string_view>());
+    (std::string) std::declval<T const>();
+  })
+struct convert<T>
+{
+  static auto to_string(T const& ref) -> std::string
+  {
+    return (std::string)ref;
+  }
+
+  static auto from_string(T& ref, std::string_view v) -> void
+  {
+    ref = T(v);
+  }
+};
+
 template <>
 struct convert<std::string>
 {
   static auto to_string(std::string const& ref) -> std::string_view
   {
     return ref;
-  }
-
-  static auto to_string(std::string ref) -> std::string
-  {
-    return std::move(ref);
   }
 
   static auto from_string(std::string& ref, std::string_view v) -> void

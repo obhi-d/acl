@@ -85,7 +85,11 @@ public:
 
   void visit(auto&& fn)
   {
-    fn(get().as_string());
+    auto value = get().as_string();
+    if (value.has_value())
+    {
+      fn(*value);
+    }
   }
 
   template <acl::detail::InputSerializableClass<Stream> T>
@@ -109,7 +113,8 @@ public:
     get().for_each(
      [&](Stream& value)
      {
-       fn(value, *this);
+       structured_input_serializer visitor{value};
+       fn(visitor);
      });
   }
 
@@ -119,8 +124,9 @@ public:
     obj = get().as_bool().value_or(false);
   }
 
-  template <acl::detail::IntegerLike Class>
-  auto visit(Class& obj) -> bool
+  template <typename Class>
+    requires(acl::detail::IntegerLike<Class> || acl::detail::EnumLike<Class>)
+  void visit(Class& obj)
   {
     if constexpr (std::is_unsigned_v<Class>)
     {
@@ -133,12 +139,12 @@ public:
   }
 
   template <acl::detail::FloatLike Class>
-  auto visit(Class& obj) -> bool
+  void visit(Class& obj)
   {
     obj = static_cast<std::decay_t<Class>>(get().as_double().value_or(0.0));
   }
 
-  [[nodiscard]] auto is_null() const -> bool
+  [[nodiscard]] auto is_null() -> bool
   {
     return serializer_ == nullptr || get().is_null();
   }

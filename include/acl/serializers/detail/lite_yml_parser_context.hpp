@@ -2,8 +2,9 @@
 
 #include <acl/allocators/linear_arena_allocator.hpp>
 #include <acl/dsl/lite_yml.hpp>
-#include <acl/reflection/detail/map_value_type.hpp>
+#include <acl/reflection/visitor.hpp>
 #include <acl/utility/detail/concepts.hpp>
+#include <string>
 #include <type_traits>
 
 namespace acl::detail
@@ -83,12 +84,9 @@ public:
 template <typename Class, typename Config>
 class icontext : public in_context_base
 {
-  using pop_fn           = std::function<void(void*)>;
-  using class_type       = std::decay_t<Class>;
-  using key_field_name   = key_field_name_t<Config>;
-  using value_field_name = value_field_name_t<Config>;
-  using type_field_name  = type_field_name_t<Config>;
-  using transform_type   = transform_t<Config>;
+  using pop_fn         = std::function<void(void*)>;
+  using class_type     = std::decay_t<Class>;
+  using transform_type = transform_t<Config>;
 
 public:
   icontext(class_type& obj, parser_state& state, in_context_base* parent) noexcept
@@ -359,11 +357,12 @@ public:
 
   void read_variant(std::string_view key)
   {
-    if (key == type_field_name::value)
+    using namespace std::string_view_literals;
+    if (key == "type"sv)
     {
       read_variant_type();
     }
-    else if (key == value_field_name::value)
+    else if (key == "value"sv)
     {
       read_variant_value<std::variant_size_v<class_type> - 1>(xvalue_);
     }
@@ -371,11 +370,10 @@ public:
 
   void read_variant_type()
   {
-
     auto mapping     = parser_state_.get().template push<icontext<std::string_view, Config>>(parser_state_.get(), this);
     mapping->pop_fn_ = [](in_context_base* mapping)
     {
-      auto object              = static_cast<icontext<uint32_t, Config>*>(mapping);
+      auto object              = static_cast<icontext<std::string, Config>*>(mapping);
       object->parent_->xvalue_ = acl::index_transform<class_type>::to_index(object->get());
       object->parent_->parser_state_.get().pop(object, object->parent_);
     };
@@ -479,31 +477,16 @@ public:
   }
 
   void push_container_item()
-    requires(ComplexMapLike<class_type>)
+    requires(MapLike<class_type>)
   {
-    using value_t    = map_value_type<typename class_type::key_type, typename class_type::mapped_type, Config>;
+    using value_t    = std::pair<typename class_type::key_type, typename class_type::mapped_type>;
     auto mapping     = parser_state_.get().template push<icontext<value_t, Config>>(parser_state_.get(), this);
     mapping->pop_fn_ = [](in_context_base* mapping)
     {
       auto* object = static_cast<icontext<value_t, Config>*>(mapping);
       auto  parent = static_cast<icontext<Class, Config>*>(object->parent_);
       auto& pair   = object->get();
-      parent->get().emplace(std::move(pair.key), std::move(pair.value_));
-      parent->parser_state_.get().pop(object, parent);
-    };
-  }
-
-  void push_container_item()
-    requires(StringMapLike<class_type>)
-  {
-    using value_t    = string_map_value_type<typename class_type::mapped_type, Config>;
-    auto mapping     = parser_state_.get().template push<icontext<value_t, Config>>(parser_state_.get(), this);
-    mapping->pop_fn_ = [](in_context_base* mapping)
-    {
-      auto* object = static_cast<icontext<value_t, Config>*>(mapping);
-      auto  parent = static_cast<icontext<Class, Config>*>(object->parent_);
-      auto& pair   = object->get();
-      parent->get().emplace(std::move(pair.key_), std::move(pair.value_));
+      parent->get().emplace(std::move(pair.first), std::move(pair.second));
       parent->parser_state_.get().pop(object, parent);
     };
   }
@@ -545,30 +528,35 @@ public:
      obj_);
   }
 
-  void read_aggregate(std::string_view key)
+  template <std::size_t I>
+  static void pop_aggregate_field(in_context_base* mapping)
+  {
+    using type                      = field_type<I, Class>;
+    auto object                     = static_cast<icontext<type, Config>*>(mapping);
+    auto parent                     = static_cast<icontext<Class, Config>*>(object->parent_);
+    get_field_ref<I>(parent->get()) = std::move(object->get());
+    parent->parser_state_.get().pop(object, parent);
+  };
+
+  template <std::size_t I>
+  void read_aggregate_field(std::string_view field_key, auto const& field_names)
+  {
+    if (std::get<I>(field_names) == field_key)
+    {
+      using type       = field_type<I, Class>;
+      auto mapping     = parser_state_.get().template push<icontext<type, Config>>(parser_state_.get(), this);
+      mapping->pop_fn_ = &pop_aggregate_field<I>;
+    }
+  }
+
+  void read_aggregate(std::string_view field_key)
   {
     constexpr auto field_names = get_field_names<Class>();
 
-    auto read_aggregate_field = [&]<std::size_t I>(std::integral_constant<std::size_t, I> /* unused */)
+    [&]<std::size_t... I>(std::index_sequence<I...>, std::string_view key)
     {
-      if (std::get<I>(field_names) == key)
-      {
-        using type       = field_type<I, Class>;
-        auto mapping     = parser_state_.get().template push<icontext<type, Config>>(parser_state_.get(), this);
-        mapping->pop_fn_ = [](in_context_base* mapping)
-        {
-          auto object                     = static_cast<icontext<type, Config>*>(mapping);
-          auto parent                     = static_cast<icontext<Class, Config>*>(object->parent_);
-          get_field_ref<I>(parent->get()) = std::move(object->get());
-          parent->parser_state_.get().pop(object, parent);
-        };
-      }
-    };
-
-    [&]<std::size_t... I>(std::index_sequence<I...>)
-    {
-      (read_aggregate_field(std::integral_constant<std::size_t, I>()), ...);
-    }(std::make_index_sequence<std::tuple_size_v<decltype(field_names)>>());
+      (read_aggregate_field<I>(key, field_names), ...);
+    }(std::make_index_sequence<std::tuple_size_v<decltype(field_names)>>(), field_key);
   }
 
 private:

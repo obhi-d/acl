@@ -16,12 +16,12 @@ struct InputData
   json root;
 };
 
-class Serializer
+class Stream
 {
 public:
-  Serializer() noexcept = default;
-  Serializer(InputData& r) : owner(r), value(std::cref(r.root)) {}
-  Serializer(InputData& r, json const& source) : owner(r), value(std::cref(source)) {}
+  Stream() noexcept = default;
+  Stream(InputData& r) : owner(r), value(std::cref(r.root)) {}
+  Stream(InputData& r, json const& source) : owner(r), value(std::cref(source)) {}
 
   bool is_object() const noexcept
   {
@@ -50,7 +50,7 @@ public:
     assert(value.get().is_object());
     for (auto const& [key, value] : value.get().items())
     {
-      lambda(std::string_view(key), Serializer(owner, value));
+      lambda(std::string_view(key), Stream(owner, value));
     }
   }
 
@@ -60,23 +60,24 @@ public:
   {
     for (auto const& value : value.get())
     {
-      lambda(Serializer(owner, value));
+      auto stream = Stream(owner, value);
+      lambda(stream);
     }
   }
 
-  std::optional<Serializer> at(std::string_view name) const noexcept
+  std::optional<Stream> at(std::string_view name) const noexcept
   {
     auto it = value.get().find(name);
     if (it != value.get().end())
-      return Serializer(owner, *it);
+      return Stream(owner, *it);
     return {};
   }
 
-  std::optional<Serializer> at(uint32_t idx) const noexcept
+  std::optional<Stream> at(uint32_t idx) const noexcept
   {
     if (idx >= value.get().size())
       return {};
-    return Serializer(owner, value.get().at(idx));
+    return Stream(owner, value.get().at(idx));
   }
 
   auto as_double() const noexcept
@@ -136,7 +137,7 @@ TEST_CASE("structured_input_serializer: Test valid stream in with reflect outsid
 
   InputData input;
   input.root                = j;
-  auto           serializer = Serializer(input);
+  auto           serializer = Stream(input);
   ReflTestFriend myStruct;
   acl::read(serializer, myStruct);
 
@@ -151,7 +152,7 @@ TEST_CASE("structured_input_serializer: Test partial stream in with reflect outs
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   ReflTestFriend myStruct;
 
@@ -167,7 +168,7 @@ TEST_CASE("structured_input_serializer: Test fail stream in with reflect outside
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   ReflTestFriend myStruct;
 
@@ -200,7 +201,7 @@ TEST_CASE("structured_input_serializer: Test valid stream in with reflect member
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   ReflTestClass myStruct;
 
@@ -227,7 +228,7 @@ TEST_CASE("structured_input_serializer: Test 1 level scoped class")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   ReflTestMember myStruct;
 
@@ -245,7 +246,7 @@ TEST_CASE("structured_input_serializer: Test partial 1 level scoped class")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   ReflTestMember myStruct;
 
@@ -274,7 +275,7 @@ TEST_CASE("structured_input_serializer: Test 2 level scoped class")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   ReflTestClass2 myStruct;
 
@@ -293,7 +294,7 @@ TEST_CASE("structured_input_serializer: Test pair")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   std::pair<ReflTestMember, std::string> myStruct;
 
@@ -312,7 +313,7 @@ TEST_CASE("structured_input_serializer: TupleLike ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   std::tuple<ReflTestMember, std::string, int, bool> myStruct = {};
 
@@ -333,7 +334,7 @@ TEST_CASE("structured_input_serializer: Invalid TupleLike ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   std::tuple<ReflTestMember, std::string, int, bool> myStruct = {};
 
@@ -348,7 +349,7 @@ TEST_CASE("structured_input_serializer: StringMapLike ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   type myMap = {};
 
@@ -367,7 +368,7 @@ TEST_CASE("structured_input_serializer: StringMapLike Invalid ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   type myMap = {};
 
@@ -382,7 +383,7 @@ TEST_CASE("structured_input_serializer: StringMapLike Invalid  Subelement")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   type myMap = {};
 
@@ -398,7 +399,7 @@ TEST_CASE("structured_input_serializer: ArrayLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   type myMap = {};
 
@@ -416,7 +417,7 @@ TEST_CASE("structured_input_serializer: ArrayLike (no emplace)")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -434,7 +435,7 @@ TEST_CASE("structured_input_serializer: ArrayLike Invalid ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 
@@ -448,7 +449,7 @@ TEST_CASE("structured_input_serializer: ArrayLike (no emplace) Invalid Subelemen
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 
@@ -463,7 +464,7 @@ TEST_CASE("structured_input_serializer: ArrayLike Invalid Subelement ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   type myMap = {};
 
@@ -479,7 +480,7 @@ TEST_CASE("structured_input_serializer: VariantLike ")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, variantList);
 
@@ -502,7 +503,7 @@ TEST_CASE("structured_input_serializer: VariantLike Invalid")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, variant));
 }
@@ -515,7 +516,7 @@ TEST_CASE("structured_input_serializer: VariantLike Missing Type")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, variant));
 }
@@ -528,7 +529,7 @@ TEST_CASE("structured_input_serializer: VariantLike Missing Value")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, variant));
 }
@@ -541,7 +542,7 @@ TEST_CASE("structured_input_serializer: VariantLike Invalid Type")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, variant));
 }
@@ -554,6 +555,11 @@ struct ConstructedSV
   {
     std::from_chars(sv.data(), sv.data() + sv.length(), id);
   }
+
+  inline explicit operator std::string() const noexcept
+  {
+    return std::to_string(id);
+  }
 };
 
 TEST_CASE("structured_input_serializer: ConstructedFromStringView")
@@ -563,7 +569,7 @@ TEST_CASE("structured_input_serializer: ConstructedFromStringView")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -581,7 +587,7 @@ TEST_CASE("structured_input_serializer: ConstructedFromStringView Invalid")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 
@@ -615,7 +621,7 @@ TEST_CASE("structured_input_serializer: TransformFromString")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -633,7 +639,7 @@ TEST_CASE("structured_input_serializer: TransformFromString Invalid")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 }
@@ -645,7 +651,7 @@ TEST_CASE("structured_input_serializer: BoolLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -663,7 +669,7 @@ TEST_CASE("structured_input_serializer: BoolLike Invaild")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 }
@@ -675,7 +681,7 @@ TEST_CASE("structured_input_serializer: SignedIntLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -692,7 +698,7 @@ TEST_CASE("structured_input_serializer: SignedIntLike Invalid")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 }
@@ -704,7 +710,7 @@ TEST_CASE("structured_input_serializer: UnsignedIntLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -721,7 +727,7 @@ TEST_CASE("structured_input_serializer: UnsignedIntLike Invalid")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 }
@@ -733,7 +739,7 @@ TEST_CASE("structured_input_serializer: FloatLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, myArray);
 
@@ -750,7 +756,7 @@ TEST_CASE("structured_input_serializer: FloatLike Invalid")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   REQUIRE_THROWS(acl::read(serializer, myArray));
 }
@@ -768,7 +774,7 @@ TEST_CASE("structured_input_serializer: PointerLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, pvalue);
 
@@ -796,7 +802,7 @@ TEST_CASE("structured_input_serializer: PointerLike Null")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, pvalue);
 
@@ -822,7 +828,7 @@ TEST_CASE("structured_input_serializer: OptionalLike")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, pvalue);
 
@@ -834,7 +840,7 @@ TEST_CASE("structured_input_serializer: OptionalLike")
 class CustomClass
 {
 public:
-  friend Serializer& operator>>(Serializer& ser, CustomClass& cc)
+  friend Stream& operator>>(Stream& ser, CustomClass& cc)
   {
     cc.value = (int)(*ser.as_int64());
     return ser;
@@ -856,7 +862,7 @@ TEST_CASE("structured_input_serializer: InputSerializableClass")
 
   InputData input;
   input.root      = j;
-  auto serializer = Serializer(input);
+  auto serializer = Stream(input);
 
   acl::read(serializer, integers);
 

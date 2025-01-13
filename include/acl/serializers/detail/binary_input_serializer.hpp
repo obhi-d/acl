@@ -3,6 +3,7 @@
 //
 #pragma once
 
+#include "acl/reflection/detail/base_concepts.hpp"
 #include "acl/reflection/visitor.hpp"
 #include <acl/reflection/detail/container_utils.hpp>
 #include <acl/reflection/detail/derived_concepts.hpp>
@@ -17,6 +18,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 namespace acl::detail
 {
@@ -48,6 +50,7 @@ public:
   using serializer_tag               = reader_tag;
   using transform_type               = acl::pass_through_transform;
   using size_type                    = cfg::container_size_type;
+  using binary                       = std::true_type;
   static constexpr bool mutate_enums = false;
 
   auto operator=(const binary_input_serializer&) -> binary_input_serializer&     = default;
@@ -79,8 +82,8 @@ public:
   template <typename Class>
   auto can_visit(Class& obj) -> continue_token
   {
-    using type = std::decay_t<Class>;
-    if constexpr (acl::detail::ByteStreambleClass<Class, Stream>)
+    using class_type = std::decay_t<Class>;
+    if constexpr (acl::detail::ByteStreambleClass<class_type, Stream>)
     {
       return true;
     }
@@ -168,13 +171,13 @@ public:
   }
 
   template <typename Class>
-    requires(acl::detail::IntegerLike<Class> || acl::detail::FloatLike<Class>)
-  auto visit(Class& obj) -> bool
+    requires(acl::detail::IntegerLike<Class> || acl::detail::FloatLike<Class> || acl::detail::EnumLike<Class>)
+  void visit(Class& obj)
   {
     if constexpr (has_fast_path)
     {
       // NOLINTNEXTLINE
-      return get().read(reinterpret_cast<std::byte*>(&obj), sizeof(obj));
+      get().read(reinterpret_cast<std::byte*>(&obj), sizeof(obj));
     }
     else
     {
@@ -184,12 +187,19 @@ public:
     }
   }
 
-  [[nodiscard]] auto is_null() const -> bool
+  [[nodiscard]] auto is_null() -> bool
   {
-    constexpr uint8_t null_value = 0x6f;
-    uint8_t           value      = 0;
+    uint8_t value = 0;
     visit(value);
-    return value == null_value;
+    if (value == cfg::null_sentinel)
+    {
+      return true;
+    }
+    if (value != cfg::not_null_sentinel)
+    {
+      throw visitor_error(visitor_error::invalid_null_sentinel);
+    }
+    return false;
   }
 
 private:
