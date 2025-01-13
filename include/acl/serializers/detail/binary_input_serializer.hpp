@@ -66,6 +66,12 @@ public:
     // No-op
   }
 
+  binary_input_serializer(acl::detail::field_visitor_tag /*unused*/, binary_input_serializer& ser, size_t /*index*/)
+      : serializer_{ser.serializer_}, object_id_(ser.object_id_), may_fast_path_(ser.may_fast_path_), type_{type::field}
+  {
+    // No-op
+  }
+
   binary_input_serializer(acl::detail::object_visitor_tag /*unused*/, binary_input_serializer& ser)
       : serializer_{ser.serializer_}, object_id_(ser.object_id_), may_fast_path_(ser.may_fast_path_),
         type_{type::object}
@@ -104,16 +110,6 @@ public:
   void visit(T& obj)
   {
     (*serializer_) >> obj;
-  }
-
-  void for_each_field(auto&& fn)
-  {
-    uint32_t count = 0;
-    visit(count);
-    for (uint32_t i = 0; i < count; ++i)
-    {
-      fn(read_string(), *this);
-    }
   }
 
   template <typename Class>

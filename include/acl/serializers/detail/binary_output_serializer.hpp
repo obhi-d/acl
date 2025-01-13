@@ -51,7 +51,13 @@ public:
   ~binary_output_serializer() noexcept = default;
 
   binary_output_serializer(acl::detail::field_visitor_tag /*unused*/, binary_output_serializer& ser,
-                           std::string_view key)
+                           std::string_view /*key*/)
+      : serializer_{ser.serializer_}, may_fast_path_(ser.may_fast_path_), type_{type::field}
+  {
+    // No-op
+  }
+
+  binary_output_serializer(acl::detail::field_visitor_tag /*unused*/, binary_output_serializer& ser, size_t /*index*/)
       : serializer_{ser.serializer_}, may_fast_path_(ser.may_fast_path_), type_{type::field}
   {
     // No-op
@@ -88,19 +94,6 @@ public:
   void visit(T& obj)
   {
     (*serializer_) << obj;
-  }
-
-  template <typename Class>
-  void for_each_field(Class const& obj, auto&& fn)
-  {
-    size_type count = obj.size();
-    visit(count);
-
-    for (auto const& [key, value] : obj)
-    {
-      visit(acl::convert<std::decay_t<decltype(key)>>::to_string(key));
-      fn(value, *this);
-    }
   }
 
   template <acl::detail::MapLike Class>

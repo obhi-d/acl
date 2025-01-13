@@ -44,18 +44,7 @@ public:
   }
 
   template <typename L>
-  void for_each_field(L&& lambda) const noexcept
-  {
-    assert(value.get().is_object());
-    for (auto const& [key, value] : value.get().items())
-    {
-      auto stream = Stream(owner, value);
-      lambda(std::string_view(key), stream);
-    }
-  }
-
-  template <typename L>
-  void for_each_entry(L&& lambda) const noexcept
+  void for_each_entry(L&& lambda) const
   {
     for (auto const& value : value.get())
     {
@@ -69,6 +58,15 @@ public:
     auto it = value.get().find(name);
     if (it != value.get().end())
       return Stream(owner, *it);
+    return {};
+  }
+
+  std::optional<Stream> at(std::size_t index) const noexcept
+  {
+    if (index < value.get().size())
+    {
+      return Stream(owner, value.get().at(index));
+    }
     return {};
   }
 
@@ -783,11 +781,11 @@ TEST_CASE("structured_input_serializer: InputSerializableClass")
 TEST_CASE("structured_input_serializer: UnorderedMap basic")
 {
   std::unordered_map<std::string, int> map;
-  json                                 j = R"({
-    "key1": 100,
-    "key2": 200,
-    "key3": 300
-  })"_json;
+  json                                 j = R"([
+     ["key1", 100],
+     ["key2", 200],
+     ["key3", 300]
+  ])"_json;
 
   InputData input;
   input.root      = j;
@@ -804,16 +802,16 @@ TEST_CASE("structured_input_serializer: UnorderedMap basic")
 TEST_CASE("structured_input_serializer: UnorderedMap with complex values")
 {
   std::unordered_map<std::string, ReflTestMember> map;
-  json                                            j = R"({
-    "obj1": {
+  json                                            j = R"([
+    ["obj1", {
       "first": { "a": 10, "b": 20 },
       "second": { "a": 30, "b": 40 }
-    },
-    "obj2": {
+    } ],
+    ["obj2", {
       "first": { "a": 50, "b": 60 },
       "second": { "a": 70, "b": 80 }
-    }
-  })"_json;
+    } ]
+  ])"_json;
 
   InputData input;
   input.root      = j;
@@ -839,10 +837,10 @@ TEST_CASE("structured_input_serializer: UnorderedMap with complex values")
 TEST_CASE("structured_input_serializer: UnorderedMap invalid value type")
 {
   std::unordered_map<std::string, int> map;
-  json                                 j = R"({
-    "key1": "not an int",
-    "key2": 200
-  })"_json;
+  json                                 j = R"([
+    ["key1", "not an int"],
+    ["key2", 200]
+  ])"_json;
 
   InputData input;
   input.root      = j;
@@ -854,16 +852,16 @@ TEST_CASE("structured_input_serializer: UnorderedMap invalid value type")
 TEST_CASE("structured_input_serializer: UnorderedMap nested maps")
 {
   std::unordered_map<std::string, std::unordered_map<std::string, int>> nested;
-  json                                                                  j = R"({
-    "map1": {
-      "a": 1,
-      "b": 2
-    },
-    "map2": {
-      "c": 3,
-      "d": 4
-    }
-  })"_json;
+  json                                                                  j = R"([
+    ["map1", [
+      ["a", 1],
+      ["b", 2]
+    ]],
+    ["map2", [
+      ["c", 3],
+      ["d", 4]
+    ]]
+  ])"_json;
 
   InputData input;
   input.root      = j;
@@ -883,7 +881,7 @@ TEST_CASE("structured_input_serializer: UnorderedMap nested maps")
 TEST_CASE("structured_input_serializer: UnorderedMap empty")
 {
   std::unordered_map<std::string, int> map;
-  json                                 j = R"({})"_json;
+  json                                 j = R"([])"_json;
 
   InputData input;
   input.root      = j;

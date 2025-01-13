@@ -10,15 +10,15 @@ template <typename Cont, typename... Args>
 static inline void emplace(Cont& container, size_t index, Args&&... args)
 
 {
-  if constexpr (requires { Cont::emplace(std::forward<Args>(args)...); })
+  if constexpr (requires { container.emplace(std::forward<Args>(args)...); })
   {
     container.emplace(std::forward<Args>(args)...);
   }
-  else if constexpr (requires { Cont::emplace_back(std::forward<Args>(args)...); })
+  else if constexpr (requires { container.emplace_back(std::forward<Args>(args)...); })
   {
     container.emplace_back(std::forward<Args>(args)...);
   }
-  else if constexpr (requires { Cont::push_back(std::forward<Args>(args)...); })
+  else if constexpr (requires { container.push_back(std::forward<Args>(args)...); })
   {
     container.push_back(std::forward<Args>(args)...);
   }

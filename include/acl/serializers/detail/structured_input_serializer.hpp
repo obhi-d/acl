@@ -3,6 +3,7 @@
 //
 #pragma once
 
+#include "acl/reflection/visitor.hpp"
 #include <acl/reflection/detail/container_utils.hpp>
 #include <acl/reflection/detail/derived_concepts.hpp>
 #include <acl/reflection/detail/visitor_helpers.hpp>
@@ -36,12 +37,17 @@ public:
   auto operator=(structured_input_serializer&&) -> structured_input_serializer&      = default;
   structured_input_serializer(structured_input_serializer const&) noexcept           = default;
   structured_input_serializer(structured_input_serializer&& i_other) noexcept : serializer_(i_other.serializer_) {}
-  structured_input_serializer(Stream& ser) noexcept : serializer_(&ser) {}
+  structured_input_serializer(Stream ser) noexcept : serializer_(std::move(ser)) {}
   ~structured_input_serializer() noexcept = default;
 
   structured_input_serializer(acl::detail::field_visitor_tag /*unused*/, structured_input_serializer& ser,
                               std::string_view key)
       : serializer_(ser.get().at(key))
+
+  {}
+  structured_input_serializer(acl::detail::field_visitor_tag /*unused*/, structured_input_serializer& ser,
+                              std::size_t index)
+      : serializer_(ser.get().at(index))
 
   {}
 
@@ -53,7 +59,7 @@ public:
     {
       if (!serializer_->is_object())
       {
-        serializer_ = nullptr;
+        serializer_.reset();
       }
     }
   }
@@ -66,7 +72,7 @@ public:
     {
       if (!serializer_->is_array())
       {
-        serializer_ = nullptr;
+        serializer_.reset();
       }
     }
   }
@@ -84,6 +90,10 @@ public:
     {
       fn(*value);
     }
+    else
+    {
+      throw visitor_error(visitor_error::invalid_value);
+    }
   }
 
   template <acl::detail::InputSerializableClass<Stream> T>
@@ -92,30 +102,39 @@ public:
     (*serializer_) >> obj;
   }
 
-  void for_each_field(auto&& fn)
-  {
-    get().for_each_field(
-     [&](std::string_view key, Stream& value)
-     {
-       fn(transform_type::transform(key), value, *this);
-     });
-  }
-
   template <typename Class>
   void for_each_entry(Class& obj, auto&& fn)
   {
-    get().for_each_entry(
-     [&](Stream& value)
-     {
-       structured_input_serializer visitor{value};
-       fn(visitor);
-     });
+    if constexpr (!ContainerCanAppendValue<Class>)
+    {
+      acl::detail::resize(obj, get().size());
+    }
+
+    try
+    {
+      get().for_each_entry(
+       [&](Stream& value)
+       {
+         structured_input_serializer visitor{value};
+         fn(visitor);
+       });
+    }
+    catch (visitor_error const& e)
+    {
+      obj = {};
+      throw;
+    }
   }
 
   template <acl::detail::BoolLike Class>
   auto visit(Class& obj)
   {
-    obj = get().as_bool().value_or(false);
+    auto value = get().as_bool();
+    if (!value.has_value())
+    {
+      throw visitor_error(visitor_error::invalid_value);
+    }
+    obj = *value;
   }
 
   template <typename Class>
@@ -124,29 +143,44 @@ public:
   {
     if constexpr (std::is_unsigned_v<Class>)
     {
-      obj = static_cast<std::decay_t<Class>>(get().as_uint64().value_or(0));
+      auto value = get().as_uint64();
+      if (!value.has_value())
+      {
+        throw visitor_error(visitor_error::invalid_value);
+      }
+      obj = static_cast<std::decay_t<Class>>(*value);
     }
     else
     {
-      obj = static_cast<std::decay_t<Class>>(get().as_int64().value_or(0));
+      auto value = get().as_int64();
+      if (!value.has_value())
+      {
+        throw visitor_error(visitor_error::invalid_value);
+      }
+      obj = static_cast<std::decay_t<Class>>(*value);
     }
   }
 
   template <acl::detail::FloatLike Class>
   void visit(Class& obj)
   {
-    obj = static_cast<std::decay_t<Class>>(get().as_double().value_or(0.0));
+    auto value = get().as_double();
+    if (!value.has_value())
+    {
+      throw visitor_error(visitor_error::invalid_value);
+    }
+    obj = *value;
   }
 
   [[nodiscard]] auto is_null() -> bool
   {
-    return serializer_ == nullptr || get().is_null();
+    return (!serializer_.has_value()) || get().is_null();
   }
 
 private:
   auto get() -> Stream&
   {
-    assert(serializer_ != nullptr);
+    assert(serializer_.has_value());
     return *serializer_;
   }
 };

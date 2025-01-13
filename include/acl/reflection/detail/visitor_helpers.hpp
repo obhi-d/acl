@@ -10,6 +10,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -139,6 +140,21 @@ void visit_serializable(Class& obj, Visitor& visitor)
 }
 
 template <typename Class, typename Visitor>
+void visit_at(Class& obj, std::size_t index, Visitor& visitor)
+{
+  using value_t = std::decay_t<Class>;
+
+  Visitor field_visitor{field_visitor_tag{}, visitor, index};
+
+  if (!field_visitor.can_visit(obj))
+  {
+    return;
+  }
+
+  visit(obj, field_visitor);
+}
+
+template <typename Class, typename Visitor>
 void visit_tuple(Class& obj, Visitor& visitor)
 {
   Visitor array_visitor{array_visitor_tag{}, visitor};
@@ -146,13 +162,10 @@ void visit_tuple(Class& obj, Visitor& visitor)
   {
     throw visitor_error(visitor_error::invalid_tuple);
   }
-
-  std::apply(
-   [&]<typename... Args>(Args&&... arg)
-   {
-     (visit(std::forward<decltype(arg)>(arg), array_visitor), ...);
-   },
-   obj);
+  [&]<std::size_t... I>(std::index_sequence<I...>)
+  {
+    (visit_at(std::get<I>(obj), I, array_visitor), ...);
+  }(std::make_index_sequence<std::tuple_size_v<std::decay_t<Class>>>{});
 }
 
 template <acl::detail::MapLike Class, typename Visitor>
@@ -262,7 +275,7 @@ void visit_variant(Class& obj, Visitor& visitor)
   }
 
   constexpr auto variant_size  = std::variant_size_v<type>;
-  uint8_t        variant_index = 0;
+  uint8_t        variant_index = std::numeric_limits<uint8_t>::max();
   {
     Visitor field_visitor{field_visitor_tag{}, object_visitor, Visitor::transform_type::transform("type")};
 
@@ -277,10 +290,16 @@ void visit_variant(Class& obj, Visitor& visitor)
     }
     else
     {
-      std::string variant_index_str;
-      visit(variant_index_str, field_visitor);
-
-      variant_index = static_cast<uint8_t>(index_transform<type>::to_index(variant_index_str));
+      try
+      {
+        std::string variant_index_str;
+        visit(variant_index_str, field_visitor);
+        variant_index = static_cast<uint8_t>(index_transform<type>::to_index(variant_index_str));
+      }
+      catch (visitor_error const& e)
+      {
+        visit(variant_index, field_visitor);
+      }
     }
 
     if (variant_index >= variant_size)
@@ -432,7 +451,7 @@ void visit_optional(Class& obj, Visitor& visitor)
 {
   if (visitor.is_null())
   {
-    obj = nullptr;
+    obj.reset();
     return;
   }
 
@@ -477,7 +496,7 @@ void visit_aggregate(Class& obj, Visitor& visitor)
     throw visitor_error(visitor_error::invalid_aggregate);
   }
 
-  constexpr auto field_names = get_field_names<Class>();
+  constexpr auto field_names = get_field_names<std::decay_t<Class>>();
 
   [&]<std::size_t... I>(std::index_sequence<I...>)
   {

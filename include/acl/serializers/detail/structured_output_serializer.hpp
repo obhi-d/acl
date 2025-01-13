@@ -84,6 +84,20 @@ public:
     }
   }
 
+  structured_output_serializer(acl::detail::field_visitor_tag /*unused*/, structured_output_serializer& ser,
+                               size_t index)
+      : serializer_{ser.serializer_}, type_{type::field}
+  {
+    if (ser.first_)
+    {
+      ser.first_ = false;
+    }
+    else
+    {
+      serializer_->next_array_entry();
+    }
+  }
+
   structured_output_serializer(acl::detail::object_visitor_tag /*unused*/, structured_output_serializer& ser)
       : serializer_{ser.serializer_}, type_{type::object}
   {
@@ -112,22 +126,6 @@ public:
   void visit(T& obj)
   {
     (*serializer_) << obj;
-  }
-
-  template <typename Class>
-  void for_each_field(Class const& obj, auto&& fn)
-  {
-    bool first = true;
-    for (auto const& [key, value] : obj)
-    {
-      if (!first)
-      {
-        get().next_map_entry();
-      }
-      first = false;
-      get().key(acl::convert<std::decay_t<decltype(key)>>::to_string(key));
-      fn(value, *this);
-    }
   }
 
   template <typename Class>

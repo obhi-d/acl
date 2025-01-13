@@ -551,7 +551,7 @@ public:
 
   void read_aggregate(std::string_view field_key)
   {
-    constexpr auto field_names = get_field_names<Class>();
+    constexpr auto field_names = get_field_names<std::decay_t<Class>>();
 
     [&]<std::size_t... I>(std::index_sequence<I...>, std::string_view key)
     {

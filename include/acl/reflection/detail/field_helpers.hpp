@@ -17,7 +17,7 @@ namespace acl::detail
  * method to access the internal member given the instance of the object
  */
 template <ExplicitlyReflected Class, typename Fn>
-void for_each_field(Fn fn, Class& obj) noexcept
+void for_each_field(Fn fn, Class& obj)
 {
   using ClassType = std::remove_const_t<Class>;
   static_assert(field_count<ClassType> > 0, "Invalid tuple size");
@@ -33,7 +33,7 @@ void for_each_field(Fn fn, Class& obj) noexcept
  * internal member given the instance of the object
  */
 template <ExplicitlyReflected Class, typename Fn>
-void for_each_field(Fn fn) noexcept
+void for_each_field(Fn fn)
 {
   using ClassType = std::remove_const_t<Class>;
   static_assert(field_count<ClassType> > 0, "Invalid tuple size");
@@ -90,14 +90,15 @@ constexpr auto deduce_field_name() -> decltype(auto)
 
   return string_literal<length + 1>{member_name.data()};
 #elif defined(__GNUC__)
-  constexpr auto        beg_mem     = name.substr(name.find(">.") + 2);
-  constexpr auto        end_mem     = beg_mem.substr(0, beg_mem.find_first_of(')'));
+  constexpr auto        beg_mem     = name.substr(name.find("A ="));
+  constexpr auto        end_mem     = beg_mem.substr(0, beg_mem.find_first_of(';') - 1);
   constexpr auto        member_name = end_mem.substr(end_mem.find_last_of(':') + 1);
   constexpr std::size_t length      = member_name.size();
 
   return string_literal<length + 1>{member_name.data()};
 #else
-  return name;
+  constexpr std::size_t length = name.size();
+  return string_literal<length + 1>{name.data()};
 #endif
 }
 
