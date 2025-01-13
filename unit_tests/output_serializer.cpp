@@ -179,9 +179,12 @@ TEST_CASE("structured_output_serializer: String map")
   acl::write(stream, example);
 
   json j = json::parse(stream.get());
-  REQUIRE(j["everything"] == "is");
-  REQUIRE(j["supposed"] == "to");
-  REQUIRE(j["work"] == "just fine");
+  REQUIRE(j[0][0] == "everything");
+  REQUIRE(j[0][1] == "is");
+  REQUIRE(j[1][0] == "supposed");
+  REQUIRE(j[1][1] == "to");
+  REQUIRE(j[2][0] == "work");
+  REQUIRE(j[2][1] == "just fine");
 }
 
 TEST_CASE("structured_output_serializer: ArrayLike")
@@ -521,18 +524,37 @@ TEST_CASE("structured_output_serializer: OutputSerializableClass")
   REQUIRE(j[2] == 323);
 }
 
-struct SerializableClass
+TEST_CASE("structured_output_serializer: Unordered map")
 {
-  std::string str;
+  std::unordered_map<int, std::string> example = {
+   {1,   "one"},
+   {2,   "two"},
+   {3, "three"}
+  };
 
-  static inline constexpr auto reflect() noexcept
+  Stream stream;
+  acl::write(stream, example);
+
+  json j = json::parse(stream.get());
+  REQUIRE(j.is_array());
+  REQUIRE(j.size() == 3);
+
+  // Since unordered_map order is not guaranteed, check each pair exists
+  bool found_all = true;
+  for (const auto& pair : example)
   {
-    return acl::bind(acl::bind<"first", &SerializableClass::str>());
+    bool found_pair = false;
+    for (const auto& elem : j)
+    {
+      if (elem[0] == pair.first && elem[1] == pair.second)
+      {
+        found_pair = true;
+        break;
+      }
+    }
+    found_all &= found_pair;
   }
-};
+  REQUIRE(found_all);
+}
 
-struct UnserializableClass
-{
-  std::string str;
-};
 // NOLINTEND

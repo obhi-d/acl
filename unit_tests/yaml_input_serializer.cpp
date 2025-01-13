@@ -222,33 +222,6 @@ tuple:
   REQUIRE(std::get<2>(ts.tuple) == 3.14);
 }
 
-TEST_CASE("yaml_object: Test read map")
-{
-  std::string yml = R"(
-map:
-  - key1: 1
-  - key2: 2
-  - key3: 3
-)";
-
-  struct TestStructMap
-  {
-    std::map<std::string, int> map;
-    static constexpr auto      reflect() noexcept
-    {
-      return acl::bind(acl::bind<"map", &TestStructMap::map>());
-    }
-  };
-
-  TestStructMap ts;
-  acl::yml::from_string(ts, yml);
-
-  REQUIRE(ts.map.size() == 3);
-  REQUIRE(ts.map["key1"] == 1);
-  REQUIRE(ts.map["key2"] == 2);
-  REQUIRE(ts.map["key3"] == 3);
-}
-
 TEST_CASE("yaml_object: Test read array")
 {
   std::string yml = R"(
@@ -385,61 +358,6 @@ c: "value
 
   TestStructInvalid ts;
   REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), std::runtime_error);
-}
-
-TEST_CASE("yaml_object: Test read complex nested structure")
-{
-  std::string yml = R"(
-root:
-  child1:
-    grandchild:
-      - item1
-      - item2
-  child2:
-    - key1: value1
-    - key2: value2
-)";
-
-  struct TestStructComplex
-  {
-    struct Child1
-    {
-      std::vector<std::string> grandchild;
-
-      static constexpr auto reflect() noexcept
-      {
-        return acl::bind(acl::bind<"grandchild", &Child1::grandchild>());
-      }
-    };
-
-    std::map<std::string, std::string> child2;
-    Child1                             child1;
-
-    static constexpr auto reflect() noexcept
-    {
-      return acl::bind(acl::bind<"child1", &TestStructComplex::child1>(),
-                       acl::bind<"child2", &TestStructComplex::child2>());
-    }
-  };
-
-  struct Root
-  {
-    TestStructComplex root;
-
-    static constexpr auto reflect() noexcept
-    {
-      return acl::bind(acl::bind<"root", &Root::root>());
-    }
-  };
-
-  Root ts;
-  acl::yml::from_string(ts, yml);
-
-  REQUIRE(ts.root.child1.grandchild.size() == 2);
-  REQUIRE(ts.root.child1.grandchild[0] == "item1");
-  REQUIRE(ts.root.child1.grandchild[1] == "item2");
-  REQUIRE(ts.root.child2["key1"] == "value1");
-  REQUIRE(ts.root.child2["key2"] == "value2");
 }
 
 TEST_CASE("yaml_object: Test read block scalar literals")
@@ -859,4 +777,28 @@ a: 2
   // Expect the last value to override
   REQUIRE(ts.a == 2);
 }
+
+TEST_CASE("yaml_object: Test read map types")
+{
+  std::string yml = R"(
+map:
+  - [1, "one"]
+  - [2, "two"]
+  - [3, "three"]
+)";
+
+  struct TestStructMap
+  {
+    std::map<int, std::string> map;
+  };
+
+  TestStructMap ts;
+  acl::yml::from_string(ts, yml);
+
+  REQUIRE(ts.map.size() == 3);
+  REQUIRE(ts.map[1] == "one");
+  REQUIRE(ts.map[2] == "two");
+  REQUIRE(ts.map[3] == "three");
+}
+
 // NOLINTEND

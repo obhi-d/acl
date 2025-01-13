@@ -86,24 +86,6 @@ TEST_CASE("yaml_output: Test write optional")
   REQUIRE(yml.find("value: 42") != std::string::npos);
 }
 
-TEST_CASE("yaml_output: Test write map")
-{
-  struct MapTest
-  {
-    std::map<std::string, int> data;
-    static constexpr auto      reflect() noexcept
-    {
-      return acl::bind(acl::bind<"data", &MapTest::data>());
-    }
-  };
-  MapTest mt{
-   {{"key1", 100}, {"key2", 200}}
-  };
-  auto yml = acl::yml::to_string(mt);
-  REQUIRE(yml.find("key1: 100") != std::string::npos);
-  REQUIRE(yml.find("key2: 200") != std::string::npos);
-}
-
 TEST_CASE("yaml_output: Test write variant")
 {
   using VarType = std::variant<int, std::string>;
@@ -139,4 +121,22 @@ TEST_CASE("yaml_output: Test write tuple")
   REQUIRE(yml.find("3.14") != std::string::npos);
 }
 
+TEST_CASE("yaml_output: Test write map")
+{
+  struct MapTest
+  {
+    std::map<std::string, int> m;
+    static constexpr auto      reflect() noexcept
+    {
+      return acl::bind(acl::bind<"m", &MapTest::m>());
+    }
+  };
+  MapTest mt{
+   {{"key1", 100}, {"key2", 200}, {"key3", 300}}
+  };
+  auto yml = acl::yml::to_string(mt);
+  REQUIRE(yml.find("- key1\n  - 100") != std::string::npos);
+  REQUIRE(yml.find("- key2\n  - 200") != std::string::npos);
+  REQUIRE(yml.find("- key3\n  - 300") != std::string::npos);
+}
 // NOLINTEND

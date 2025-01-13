@@ -26,7 +26,7 @@ concept StructuredInputStream = requires(V v) {
   // function for_each: Should accept a lambda that accepts a key and value_type
   // This function should consume a field that is a map of key, values
   {
-    v.for_each(
+    v.for_each_field(
      [](::std::string_view key, V) -> bool
      {
        return false;
@@ -36,7 +36,7 @@ concept StructuredInputStream = requires(V v) {
   // function for_each: Should accept a lambda that accepts a value_type
   // This function should consume a field that is an array of values
   {
-    v.for_each(
+    v.for_each_entry(
      [](V) -> bool
      {
        return false;
@@ -44,10 +44,7 @@ concept StructuredInputStream = requires(V v) {
   } -> std::same_as<void>;
 
   // function object: Must return object_type
-  { v.at(::std::string_view()) } -> acl::detail::OptionalValueLike;
-
-  // function object: Must return object_type given an array index
-  { v.at(0) } -> acl::detail::OptionalValueLike;
+  { v.at(::std::string_view()) } -> std::same_as<std::optional<V>>;
 
   // Must convert value_type to double
   { v.as_double() } -> acl::detail::OptionalValueLike;

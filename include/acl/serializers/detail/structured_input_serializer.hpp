@@ -23,7 +23,7 @@ class structured_input_serializer
 {
 
 private:
-  Stream* serializer_ = nullptr;
+  std::optional<Stream> serializer_;
 
 public:
   using serializer_type              = Stream;
@@ -41,21 +41,15 @@ public:
 
   structured_input_serializer(acl::detail::field_visitor_tag /*unused*/, structured_input_serializer& ser,
                               std::string_view key)
-      : serializer_{ser.serializer_}
+      : serializer_(ser.get().at(key))
 
-  {
-    auto ref = ser.get().at(key);
-    if (ref)
-    {
-      serializer_ = &*ref;
-    }
-  }
+  {}
 
   structured_input_serializer(acl::detail::object_visitor_tag /*unused*/, structured_input_serializer& ser)
       : serializer_{ser.serializer_}
   {
     // No-op
-    if (serializer_ != nullptr)
+    if (serializer_.has_value())
     {
       if (!serializer_->is_object())
       {
@@ -68,7 +62,7 @@ public:
       : serializer_{ser.serializer_}
   {
     // No-op
-    if (serializer_ != nullptr)
+    if (serializer_.has_value())
     {
       if (!serializer_->is_array())
       {
@@ -80,7 +74,7 @@ public:
   template <typename Class>
   auto can_visit(Class& obj) -> continue_token
   {
-    return serializer_ != nullptr;
+    return serializer_.has_value();
   }
 
   void visit(auto&& fn)
@@ -100,7 +94,7 @@ public:
 
   void for_each_field(auto&& fn)
   {
-    get().for_each(
+    get().for_each_field(
      [&](std::string_view key, Stream& value)
      {
        fn(transform_type::transform(key), value, *this);
@@ -110,7 +104,7 @@ public:
   template <typename Class>
   void for_each_entry(Class& obj, auto&& fn)
   {
-    get().for_each(
+    get().for_each_entry(
      [&](Stream& value)
      {
        structured_input_serializer visitor{value};

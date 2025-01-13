@@ -44,19 +44,18 @@ public:
   }
 
   template <typename L>
-    requires(acl::function_traits<L>::arity == 2)
-  void for_each(L&& lambda) const noexcept
+  void for_each_field(L&& lambda) const noexcept
   {
     assert(value.get().is_object());
     for (auto const& [key, value] : value.get().items())
     {
-      lambda(std::string_view(key), Stream(owner, value));
+      auto stream = Stream(owner, value);
+      lambda(std::string_view(key), stream);
     }
   }
 
   template <typename L>
-    requires(acl::function_traits<L>::arity == 1)
-  void for_each(L&& lambda) const noexcept
+  void for_each_entry(L&& lambda) const noexcept
   {
     for (auto const& value : value.get())
     {
@@ -71,13 +70,6 @@ public:
     if (it != value.get().end())
       return Stream(owner, *it);
     return {};
-  }
-
-  std::optional<Stream> at(uint32_t idx) const noexcept
-  {
-    if (idx >= value.get().size())
-      return {};
-    return Stream(owner, value.get().at(idx));
   }
 
   auto as_double() const noexcept
@@ -341,75 +333,6 @@ TEST_CASE("structured_input_serializer: Invalid TupleLike ")
   REQUIRE_THROWS(acl::read(serializer, myStruct));
 }
 
-TEST_CASE("structured_input_serializer: StringMapLike ")
-{
-  using pair_type = std::pair<int, std::string>;
-  using type      = std::unordered_map<std::string, pair_type>;
-  json j          = R"({ "first":[ 100, "100"], "second":[ 300, "300" ] , "third":[ 400, "400" ] })"_json;
-
-  InputData input;
-  input.root      = j;
-  auto serializer = Stream(input);
-
-  type myMap = {};
-
-  acl::read(serializer, myMap);
-
-  REQUIRE(myMap["first"] == pair_type(100, "100"));
-  REQUIRE(myMap["second"] == pair_type(300, "300"));
-  REQUIRE(myMap["third"] == pair_type(400, "400"));
-}
-
-TEST_CASE("structured_input_serializer: StringMapLike Invalid ")
-{
-  using pair_type = std::pair<int, std::string>;
-  using type      = std::unordered_map<std::string, pair_type>;
-  json j          = R"({ "first":"invalid", "second":[ 300, "300" ] , "third":[ 400, "400" ] })"_json;
-
-  InputData input;
-  input.root      = j;
-  auto serializer = Stream(input);
-
-  type myMap = {};
-
-  REQUIRE_THROWS(acl::read(serializer, myMap));
-}
-
-TEST_CASE("structured_input_serializer: StringMapLike Invalid  Subelement")
-{
-  using pair_type = std::pair<int, std::string>;
-  using type      = std::unordered_map<std::string, pair_type>;
-  json j          = R"([ "invalid", [ 300, "300" ] , [ 400, "400" ] ])"_json;
-
-  InputData input;
-  input.root      = j;
-  auto serializer = Stream(input);
-
-  type myMap = {};
-
-  REQUIRE_THROWS(acl::read(serializer, myMap));
-}
-
-TEST_CASE("structured_input_serializer: ArrayLike")
-{
-  using pair_type = std::pair<int, std::string>;
-  using type      = std::unordered_map<int, pair_type>;
-  json j =
-   R"([ {"key":11, "value":[ 100, "100"]}, {"key":13, "value":[ 300, "300" ]} , {"key":15, "value":[ 400, "400" ]} ])"_json;
-
-  InputData input;
-  input.root      = j;
-  auto serializer = Stream(input);
-
-  type myMap = {};
-
-  acl::read(serializer, myMap);
-
-  REQUIRE(myMap[11] == pair_type(100, "100"));
-  REQUIRE(myMap[13] == pair_type(300, "300"));
-  REQUIRE(myMap[15] == pair_type(400, "400"));
-}
-
 TEST_CASE("structured_input_serializer: ArrayLike (no emplace)")
 {
   acl::dynamic_array<int> myArray;
@@ -454,21 +377,6 @@ TEST_CASE("structured_input_serializer: ArrayLike (no emplace) Invalid Subelemen
   REQUIRE_THROWS(acl::read(serializer, myArray));
 
   REQUIRE(myArray.empty());
-}
-
-TEST_CASE("structured_input_serializer: ArrayLike Invalid Subelement ")
-{
-  using pair_type = std::pair<int, std::string>;
-  using type      = std::unordered_map<int, pair_type>;
-  json j          = R"([ [11, [ 100, 100]], [13, [ 300, "300" ]] , [15, [ 400, "400" ]] ])"_json;
-
-  InputData input;
-  input.root      = j;
-  auto serializer = Stream(input);
-
-  type myMap = {};
-
-  REQUIRE_THROWS(acl::read(serializer, myMap));
 }
 
 TEST_CASE("structured_input_serializer: VariantLike ")
@@ -870,5 +778,119 @@ TEST_CASE("structured_input_serializer: InputSerializableClass")
   REQUIRE(integers[0].get() == 34);
   REQUIRE(integers[1].get() == 542);
   REQUIRE(integers[2].get() == 234);
+}
+
+TEST_CASE("structured_input_serializer: UnorderedMap basic")
+{
+  std::unordered_map<std::string, int> map;
+  json                                 j = R"({
+    "key1": 100,
+    "key2": 200,
+    "key3": 300
+  })"_json;
+
+  InputData input;
+  input.root      = j;
+  auto serializer = Stream(input);
+
+  acl::read(serializer, map);
+
+  REQUIRE(map.size() == 3);
+  REQUIRE(map["key1"] == 100);
+  REQUIRE(map["key2"] == 200);
+  REQUIRE(map["key3"] == 300);
+}
+
+TEST_CASE("structured_input_serializer: UnorderedMap with complex values")
+{
+  std::unordered_map<std::string, ReflTestMember> map;
+  json                                            j = R"({
+    "obj1": {
+      "first": { "a": 10, "b": 20 },
+      "second": { "a": 30, "b": 40 }
+    },
+    "obj2": {
+      "first": { "a": 50, "b": 60 },
+      "second": { "a": 70, "b": 80 }
+    }
+  })"_json;
+
+  InputData input;
+  input.root      = j;
+  auto serializer = Stream(input);
+
+  acl::read(serializer, map);
+
+  REQUIRE(map.size() == 2);
+
+  auto& obj1 = map["obj1"];
+  REQUIRE(obj1.first.get_a() == 10);
+  REQUIRE(obj1.first.get_b() == 20);
+  REQUIRE(obj1.second.get_a() == 30);
+  REQUIRE(obj1.second.get_b() == 40);
+
+  auto& obj2 = map["obj2"];
+  REQUIRE(obj2.first.get_a() == 50);
+  REQUIRE(obj2.first.get_b() == 60);
+  REQUIRE(obj2.second.get_a() == 70);
+  REQUIRE(obj2.second.get_b() == 80);
+}
+
+TEST_CASE("structured_input_serializer: UnorderedMap invalid value type")
+{
+  std::unordered_map<std::string, int> map;
+  json                                 j = R"({
+    "key1": "not an int",
+    "key2": 200
+  })"_json;
+
+  InputData input;
+  input.root      = j;
+  auto serializer = Stream(input);
+
+  REQUIRE_THROWS(acl::read(serializer, map));
+}
+
+TEST_CASE("structured_input_serializer: UnorderedMap nested maps")
+{
+  std::unordered_map<std::string, std::unordered_map<std::string, int>> nested;
+  json                                                                  j = R"({
+    "map1": {
+      "a": 1,
+      "b": 2
+    },
+    "map2": {
+      "c": 3,
+      "d": 4
+    }
+  })"_json;
+
+  InputData input;
+  input.root      = j;
+  auto serializer = Stream(input);
+
+  acl::read(serializer, nested);
+
+  REQUIRE(nested.size() == 2);
+  REQUIRE(nested["map1"].size() == 2);
+  REQUIRE(nested["map2"].size() == 2);
+  REQUIRE(nested["map1"]["a"] == 1);
+  REQUIRE(nested["map1"]["b"] == 2);
+  REQUIRE(nested["map2"]["c"] == 3);
+  REQUIRE(nested["map2"]["d"] == 4);
+}
+
+TEST_CASE("structured_input_serializer: UnorderedMap empty")
+{
+  std::unordered_map<std::string, int> map;
+  json                                 j = R"({})"_json;
+
+  InputData input;
+  input.root      = j;
+  auto serializer = Stream(input);
+
+  acl::read(serializer, map);
+
+  REQUIRE(map.empty());
 }
 // NOLINTEND
