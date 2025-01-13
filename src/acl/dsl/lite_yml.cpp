@@ -226,12 +226,21 @@ void istream::handle_indent(uint16_t new_indent)
   {
     close_context(new_indent);
   }
+  else if (new_indent > indent_level_)
+  {
+    state_ = parse_state::in_new_context;
+  }
+
   indent_level_ = new_indent;
 }
 
 void istream::handle_key(string_slice key)
 {
-  ctx_->begin_key(get_view(key));
+  if (state_ != parse_state::in_new_context)
+  {
+    ctx_->begin_object();
+  }
+  ctx_->set_key(get_view(key));
   indent_stack_.emplace_back(indent_level_, container_type::object);
   state_ = parse_state::in_value;
 }
@@ -318,7 +327,7 @@ void istream::close_context(uint16_t new_indent)
     }
     else
     {
-      ctx_->end_key();
+      ctx_->end_object();
     }
     indent_stack_.pop_back();
   }
@@ -335,7 +344,7 @@ void istream::close_last_context()
     }
     else
     {
-      ctx_->end_key();
+      ctx_->end_object();
     }
     indent_stack_.pop_back();
   }

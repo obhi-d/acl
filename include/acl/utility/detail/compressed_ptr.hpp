@@ -1,3 +1,5 @@
+#pragma once
+
 #include <acl/utility/config.hpp>
 #include <compare>
 #include <cstdint>

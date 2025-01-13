@@ -9,52 +9,18 @@
 #include <acl/reflection/detail/visitor_helpers.hpp>
 #include <acl/reflection/reflection.hpp>
 #include <acl/reflection/type_name.hpp>
-#include <acl/reflection/visitor.hpp>
+#include <acl/reflection/visitor_impl.hpp>
+#include <acl/utility/detail/concepts.hpp>
 
 #include <cassert>
 
-namespace acl
+namespace acl::detail
 {
-
-template <typename V>
-concept OutputSerializer = requires(V v) {
-  // begin array
-  v.begin_array();
-
-  // end array
-  v.end_array();
-
-  // begin object
-  v.begin_object();
-
-  // end array
-  v.end_object();
-
-  // key
-  v.key(std::string_view());
-
-  // value
-  v.as_string(std::string_view());
-
-  v.as_uint64(uint64_t());
-
-  v.as_int64(int64_t());
-
-  v.as_double(double());
-
-  v.as_bool(bool());
-
-  v.as_null();
-
-  // begin of next key
-  v.next_map_entry();
-  v.next_array_entry();
-};
 
 // Given an input serializer, load
 // a bound class
-template <OutputSerializer Serializer, typename Config = acl::config<>>
-class strucutred_output_serializer
+template <typename Stream, typename Config = acl::config<>>
+class structured_output_serializer
 {
 
 private:
@@ -65,17 +31,23 @@ private:
     field
   };
 
-  Serializer* serializer_ = nullptr;
-  type        type_       = type::object;
-  bool        first_      = true;
+  Stream* serializer_ = nullptr;
+  type    type_       = type::object;
+  bool    first_      = true;
 
 public:
-  auto operator=(const strucutred_output_serializer&) -> strucutred_output_serializer&     = default;
-  auto operator=(strucutred_output_serializer&&) noexcept -> strucutred_output_serializer& = default;
-  strucutred_output_serializer(strucutred_output_serializer const&)                        = default;
-  strucutred_output_serializer(strucutred_output_serializer&& i_other) noexcept : serializer_(i_other.serializer_) {}
-  strucutred_output_serializer(Serializer& ser) : serializer_(ser) {}
-  ~strucutred_output_serializer() noexcept
+  using serializer_type              = Stream;
+  using serializer_tag               = writer_tag;
+  using transform_type               = transform_t<Config>;
+  using config_type                  = Config;
+  static constexpr bool mutate_enums = requires { typename Config::mutate_enums_type; };
+
+  auto operator=(const structured_output_serializer&) -> structured_output_serializer&     = default;
+  auto operator=(structured_output_serializer&&) noexcept -> structured_output_serializer& = default;
+  structured_output_serializer(structured_output_serializer const&)                        = default;
+  structured_output_serializer(structured_output_serializer&& i_other) noexcept : serializer_(i_other.serializer_) {}
+  structured_output_serializer(Stream& ser) : serializer_(&ser) {}
+  ~structured_output_serializer() noexcept
   {
     if (serializer_)
     {
@@ -93,7 +65,7 @@ public:
     }
   }
 
-  strucutred_output_serializer(acl::detail::field_visitor_tag /*unused*/, strucutred_output_serializer& ser,
+  structured_output_serializer(acl::detail::field_visitor_tag /*unused*/, structured_output_serializer& ser,
                                std::string_view key)
       : serializer_{ser.serializer_}, type_{type::field}
   {
@@ -112,7 +84,7 @@ public:
     }
   }
 
-  strucutred_output_serializer(acl::detail::object_visitor_tag /*unused*/, strucutred_output_serializer& ser)
+  structured_output_serializer(acl::detail::object_visitor_tag /*unused*/, structured_output_serializer& ser)
       : serializer_{ser.serializer_}, type_{type::object}
   {
     if (serializer_)
@@ -121,7 +93,7 @@ public:
     }
   }
 
-  strucutred_output_serializer(acl::detail::array_visitor_tag /*unused*/, strucutred_output_serializer& ser)
+  structured_output_serializer(acl::detail::array_visitor_tag /*unused*/, structured_output_serializer& ser)
       : serializer_{ser.serializer_}, type_{type::array}
   {
     if (serializer_)
@@ -136,7 +108,7 @@ public:
     return true;
   }
 
-  template <acl::detail::OutputSerializableClass<Serializer> T>
+  template <acl::detail::OutputSerializableClass<Stream> T>
   void visit(T& obj)
   {
     (*serializer_) >> obj;
@@ -153,7 +125,7 @@ public:
         get().next_map_entry();
       }
       first = false;
-      get().key(acl::transform<std::decay_t<decltype(key)>>::to_string(key));
+      get().key(acl::convert<std::decay_t<decltype(key)>>::to_string(key));
       fn(value, *this);
     }
   }
@@ -197,13 +169,13 @@ public:
   }
 
   template <acl::detail::BoolLike Class>
-  auto visit(Class& obj)
+  void visit(Class& obj)
   {
     get().as_bool(obj);
   }
 
   template <acl::detail::IntegerLike Class>
-  auto visit(Class& obj) -> bool
+  void visit(Class& obj)
   {
     if constexpr (std::is_unsigned_v<Class>)
     {
@@ -216,7 +188,7 @@ public:
   }
 
   template <acl::detail::FloatLike Class>
-  auto visit(Class& obj) -> bool
+  void visit(Class& obj)
   {
     get().as_double(obj);
   }
@@ -229,11 +201,11 @@ public:
   void set_not_null() {}
 
 private:
-  auto get() -> Serializer&
+  auto get() -> Stream&
   {
     assert(serializer_ != nullptr);
     return *serializer_;
   }
 };
 
-} // namespace acl
+} // namespace acl::detail

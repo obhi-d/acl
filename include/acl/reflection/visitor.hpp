@@ -1,6 +1,8 @@
 
 #pragma once
 #include <acl/reflection/detail/field_helpers.hpp>
+#include <exception>
+#include <format>
 
 namespace acl
 {
@@ -42,7 +44,7 @@ concept Visitor = requires(T& visitor, Class& obj) {
  * to the appropriate specialized visitor implementation. It supports various C++ types including:
  * - Explicitly reflected types
  * - Serializable types (both input and output)
- * - Transformable types
+ * - Convertible types
  * - Tuple-like types
  * - Container-like types
  * - Variant-like types
@@ -63,5 +65,62 @@ concept Visitor = requires(T& visitor, Class& obj) {
  */
 template <typename Class, typename Visitor>
 auto visit(Class& obj, Visitor& visitor) -> void;
+
+struct visitor_error : std::exception
+{
+  enum code : uint8_t
+  {
+    unknown,
+    invalid_tuple,
+    invalid_container,
+    invalid_variant,
+    invalid_variant_type,
+    invalid_aggregate
+  };
+
+  explicit visitor_error(code errc) noexcept : code_(errc) {}
+
+  [[nodiscard]] auto what() const noexcept -> const char* override
+  {
+    switch (code_)
+    {
+    case invalid_tuple:
+      return "Invalid tuple";
+    case invalid_container:
+      return "Invalid container";
+    case invalid_variant:
+      return "Invalid variant";
+    case invalid_variant_type:
+      return "Invalid variant type";
+    case invalid_aggregate:
+      return "Invalid aggregate";
+    default:
+      return "Unknown visitor error";
+    }
+  }
+
+  [[nodiscard]] auto get_code() const noexcept -> code
+  {
+    return code_;
+  }
+
+private:
+  code code_ = code::unknown;
+};
+
+/**
+ * @brief Post-read an object, visitors may use this to perform cleanup or finalization
+ */
+template <typename T>
+void post_read(T& obj)
+{
+  if constexpr (std::is_pointer_v<T>)
+  {
+    if (obj)
+    {
+      post_read(*obj);
+    }
+  }
+}
 
 } // namespace acl

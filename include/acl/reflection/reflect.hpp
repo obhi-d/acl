@@ -6,6 +6,8 @@
 
 namespace acl
 {
+template <typename C>
+concept ClassWithReflect = requires { C::reflect(); };
 
 /**
  * @brief Reflects on a class type to obtain its metadata.
@@ -22,13 +24,15 @@ namespace acl
  * @note This function is marked noexcept and will be evaluated at compile-time
  *       through if constexpr.
  */
-template <typename Class = void>
-auto reflect() noexcept -> decltype(auto)
+template <ClassWithReflect Class>
+auto reflect() noexcept
 {
-  if constexpr (requires { Class::reflect(); })
-  {
-    return Class::reflect();
-  }
+  return Class::reflect();
+}
+
+template <typename Class = void>
+auto reflect() noexcept
+{
   return std::tuple<>();
 }
 

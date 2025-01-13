@@ -1,8 +1,10 @@
 
 #pragma once
+#include "acl/reflection/detail/aggregate.hpp"
 #include "acl/reflection/detail/base_concepts.hpp"
 #include <acl/reflection/detail/visitor_helpers.hpp>
 #include <acl/reflection/visitor.hpp>
+#include <acl/utility/always_false.hpp>
 
 namespace acl
 {
@@ -27,9 +29,9 @@ void visit(Class& obj, Visitor& visitor)
   {
     return acl::detail::visit_serializable(obj, visitor);
   }
-  else if constexpr (acl::detail::Transformable<type>)
+  else if constexpr (acl::detail::Convertible<type>)
   {
-    return acl::detail::visit_transformable(obj, visitor);
+    return acl::detail::visit_convertible(obj, visitor);
   }
   else if constexpr (acl::detail::TupleLike<type>)
   {
@@ -69,10 +71,7 @@ void visit(Class& obj, Visitor& visitor)
   }
   else
   {
-    []<bool Flag = false>()
-    {
-      static_assert(Flag, "This type is not serializable");
-    }();
+    static_assert(always_false<type>, "This type is not serializable");
   }
 }
 

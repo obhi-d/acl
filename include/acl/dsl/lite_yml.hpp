@@ -32,8 +32,9 @@ public:
   virtual ~context() noexcept                    = default;
   virtual void begin_array()                     = 0;
   virtual void end_array()                       = 0;
-  virtual void begin_key(std::string_view slice) = 0;
-  virtual void end_key()                         = 0;
+  virtual void begin_object()                    = 0;
+  virtual void end_object()                      = 0;
+  virtual void set_key(std::string_view slice)   = 0;
   virtual void set_value(std::string_view slice) = 0;
 };
 
@@ -69,7 +70,7 @@ private:
   enum class parse_state : uint8_t
   {
     none,
-    in_object,
+    in_new_context,
     in_key,
     in_value,
     in_block_scalar,

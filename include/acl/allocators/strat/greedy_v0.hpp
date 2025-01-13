@@ -1,8 +1,8 @@
 #pragma once
 
-#include <acl/allocators/arena_options.hpp>
-#include <acl/allocators/best_fit_options.hpp>
+#include <acl/allocators/config.hpp>
 #include <acl/allocators/detail/arena.hpp>
+#include <acl/utility/optional_val.hpp>
 #include <acl/utility/type_traits.hpp>
 
 namespace acl::strat
@@ -16,7 +16,7 @@ namespace acl::strat
 template <typename Config = acl::config<>>
 class greedy_v0
 {
-  using optional_addr = acl::detail::optional_val<std::numeric_limits<uint32_t>::max()>;
+  using optional_addr = acl::optional_val<std::numeric_limits<uint32_t>::max()>;
 
 public:
   using extension       = uint64_t;

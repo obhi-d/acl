@@ -41,7 +41,7 @@ struct string_literal
     return compute(static_cast<char const*>(value_), N - 1);
   }
 
-  constexpr operator std::string_view() const
+  constexpr explicit(false) operator std::string_view() const
   {
     return {static_cast<char const*>(value_), N - 1};
   }

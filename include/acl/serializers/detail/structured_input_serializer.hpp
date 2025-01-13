@@ -8,88 +8,40 @@
 #include <acl/reflection/detail/visitor_helpers.hpp>
 #include <acl/reflection/reflection.hpp>
 #include <acl/reflection/type_name.hpp>
-#include <acl/reflection/visitor.hpp>
+#include <acl/reflection/visitor_impl.hpp>
+#include <acl/utility/detail/concepts.hpp>
 
 #include <cassert>
 
-namespace acl
+namespace acl::detail
 {
-
-template <typename V>
-concept InputSerializer = requires(V v) {
-  // function: Must return object_type
-  { v.is_object() } -> ::std::same_as<bool>;
-
-  // function: Must return object_type
-  { v.is_array() } -> ::std::same_as<bool>;
-
-  // function: Must return object_type
-  { v.is_null() } -> ::std::same_as<bool>;
-
-  // size
-  { v.size() } -> ::std::convertible_to<std::size_t>;
-
-  // function for_each: Should accept a lambda that accepts a key and value_type
-  // This function should consume a field that is a map of key, values
-  {
-    v.for_each(
-     [](::std::string_view key, V) -> bool
-     {
-       return false;
-     })
-  } -> std::same_as<void>;
-
-  // function for_each: Should accept a lambda that accepts a value_type
-  // This function should consume a field that is an array of values
-  {
-    v.for_each(
-     [](V) -> bool
-     {
-       return false;
-     })
-  } -> std::same_as<void>;
-
-  // function object: Must return object_type
-  { v.at(::std::string_view()) } -> acl::detail::OptionalValueLike;
-
-  // function object: Must return object_type given an array index
-  { v.at(uint32_t(0)) } -> acl::detail::OptionalValueLike;
-
-  // Must convert value_type to double
-  { v.as_double() } -> acl::detail::OptionalValueLike;
-
-  // Must convert value_type to float
-  { v.as_uint64() } -> acl::detail::OptionalValueLike;
-
-  // Must convert value_type to float
-  { v.as_int64() } -> acl::detail::OptionalValueLike;
-
-  // Must convert value_type to float
-  { v.as_bool() } -> acl::detail::OptionalValueLike;
-
-  // Must convert value_type to float
-  { v.as_string() } -> acl::detail::OptionalValueLike;
-};
 
 // Given an input serializer, load
 // a bound class
-template <InputSerializer Serializer, typename Config = acl::config<>>
+template <typename Stream, typename Config = acl::config<>>
 class structured_input_serializer
 {
 
 private:
-  Serializer* serializer_ = nullptr;
+  Stream* serializer_ = nullptr;
 
 public:
+  using serializer_type              = Stream;
+  using serializer_tag               = reader_tag;
+  using transform_type               = transform_t<Config>;
+  using config_type                  = Config;
+  static constexpr bool mutate_enums = requires { typename Config::mutate_enums_type; };
+
   auto operator=(const structured_input_serializer&) -> structured_input_serializer& = default;
   auto operator=(structured_input_serializer&&) -> structured_input_serializer&      = default;
   structured_input_serializer(structured_input_serializer const&) noexcept           = default;
   structured_input_serializer(structured_input_serializer&& i_other) noexcept : serializer_(i_other.serializer_) {}
-  structured_input_serializer(Serializer& ser) noexcept : serializer_(&ser) {}
+  structured_input_serializer(Stream& ser) noexcept : serializer_(&ser) {}
   ~structured_input_serializer() noexcept = default;
 
   structured_input_serializer(acl::detail::field_visitor_tag /*unused*/, structured_input_serializer& ser,
                               std::string_view key)
+      : serializer_{ser.serializer_}
 
   {
     auto ref = ser.get().at(key);
@@ -136,7 +88,7 @@ public:
     fn(get().as_string());
   }
 
-  template <acl::detail::InputSerializableClass<Serializer> T>
+  template <acl::detail::InputSerializableClass<Stream> T>
   void visit(T& obj)
   {
     (*serializer_) >> obj;
@@ -145,9 +97,9 @@ public:
   void for_each_field(auto&& fn)
   {
     get().for_each(
-     [&](std::string_view key, Serializer& value)
+     [&](std::string_view key, Stream& value)
      {
-       fn(key, value, *this);
+       fn(transform_type::transform(key), value, *this);
      });
   }
 
@@ -155,7 +107,7 @@ public:
   void for_each_entry(Class& obj, auto&& fn)
   {
     get().for_each(
-     [&](Serializer& value)
+     [&](Stream& value)
      {
        fn(value, *this);
      });
@@ -192,11 +144,11 @@ public:
   }
 
 private:
-  auto get() -> Serializer&
+  auto get() -> Stream&
   {
     assert(serializer_ != nullptr);
     return *serializer_;
   }
 };
 
-} // namespace acl
+} // namespace acl::detail

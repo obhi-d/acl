@@ -1,6 +1,7 @@
 #pragma once
 
 #include <acl/reflection/reflect.hpp>
+#include <tuple>
 
 namespace acl::detail
 {
@@ -11,10 +12,10 @@ using bind_type = decltype(reflect<Class>());
 
 // Utils
 template <typename Class>
-inline constexpr std::size_t tuple_size = tuple_size<bind_type<std::decay_t<Class>>>;
+inline constexpr std::size_t field_count = std::tuple_size_v<bind_type<std::decay_t<Class>>>;
 
 template <typename Class>
-concept ExplicitlyReflected = (acl::detail::tuple_size<Class>) > 0;
+concept ExplicitlyReflected = (field_count<Class>) > 0;
 
 template <typename Class>
 concept ByteStreamable =

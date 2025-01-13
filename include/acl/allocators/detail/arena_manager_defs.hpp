@@ -1,23 +1,12 @@
 
 #pragma once
 
-#include <acl/allocators/arena_options.hpp>
-#include <acl/allocators/best_fit_options.hpp>
+#include <acl/allocators/config.hpp>
 #include <acl/allocators/strat/best_fit_v2.hpp>
 #include <format>
 
 namespace acl::detail
 {
-
-template <typename T>
-concept HasMemoryManager = requires { typename T::manager_t; };
-
-template <typename T>
-concept HasAllocStrategy = requires { typename T::strategy_t; };
-
-template <typename O>
-concept HasBsearchAlgo = requires { O::bsearch_algo; };
-
 template <typename T>
 struct manager
 {

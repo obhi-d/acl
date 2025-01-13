@@ -5,6 +5,8 @@
 #include <acl/reflection/detail/derived_concepts.hpp>
 
 #include <source_location>
+#include <type_traits>
+#include <utility>
 
 namespace acl::detail
 {
@@ -18,11 +20,11 @@ template <ExplicitlyReflected Class, typename Fn>
 void for_each_field(Fn fn, Class& obj) noexcept
 {
   using ClassType = std::remove_const_t<Class>;
-  static_assert(tuple_size<ClassType> > 0, "Invalid tuple size");
+  static_assert(field_count<ClassType> > 0, "Invalid tuple size");
   return [&]<std::size_t... I>(std::index_sequence<I...>, auto tup)
   {
     (fn(obj, std::get<I>(tup), std::integral_constant<std::size_t, I>()), ...);
-  }(std::make_index_sequence<tuple_size<ClassType>>(), reflect<ClassType>());
+  }(std::make_index_sequence<field_count<ClassType>>(), reflect<ClassType>());
 }
 
 /**
@@ -34,25 +36,19 @@ template <ExplicitlyReflected Class, typename Fn>
 void for_each_field(Fn fn) noexcept
 {
   using ClassType = std::remove_const_t<Class>;
-  static_assert(tuple_size<ClassType> > 0, "Invalid tuple size");
+  static_assert(field_count<ClassType> > 0, "Invalid tuple size");
   return [&]<std::size_t... I>(std::index_sequence<I...>, auto tup)
   {
     (fn(std::get<I>(tup), std::integral_constant<std::size_t, I>()), ...);
-  }(std::make_index_sequence<tuple_size<ClassType>>(), reflect<ClassType>());
+  }(std::make_index_sequence<field_count<ClassType>>(), reflect<ClassType>());
 }
 
 template <ExplicitlyReflected Class, std::size_t I>
 constexpr auto field_at() noexcept
 {
   using ClassType = std::remove_const_t<Class>;
-  static_assert(tuple_size<ClassType> > 0, "Invalid tuple size");
+  static_assert(field_count<ClassType> > 0, "Invalid tuple size");
   return std::get<I>(reflect<ClassType>());
-}
-
-template <ExplicitlyReflected ClassType>
-constexpr auto field_size() noexcept -> uint32_t
-{
-  return tuple_size<ClassType>;
 }
 
 template <typename T>
@@ -123,7 +119,7 @@ constexpr auto get_field_names() noexcept -> decltype(auto)
 }
 
 template <Aggregate T>
-constexpr auto get_refs(T& ref) noexcept -> decltype(auto)
+constexpr auto get_field_refs(T& ref) noexcept -> decltype(auto)
 {
   return aggregate_lookup(
    [](auto&&... args) constexpr -> decltype(auto)
@@ -132,5 +128,24 @@ constexpr auto get_refs(T& ref) noexcept -> decltype(auto)
    },
    ref);
 }
+template <auto I, Aggregate T>
+constexpr auto get_field_ref(T& ref) noexcept -> decltype(auto)
+{
+  return aggregate_lookup(
+   [](auto&&... args) constexpr -> decltype(auto)
+   {
+     return [&]<auto... Is>(std::index_sequence<Is...>) constexpr -> decltype(auto)
+     {
+       return [](decltype((void*)Is)..., auto* nth, auto*...) -> decltype(auto)
+       {
+         return *nth;
+       }(&args...);
+     }(std::make_index_sequence<I>{});
+   },
+   ref);
+}
+
+template <auto I, Aggregate T>
+using field_type = std::remove_cvref_t<decltype(get_field_ref<I>(std::declval<T&>()))>;
 
 } // namespace acl::detail

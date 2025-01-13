@@ -1,5 +1,7 @@
 #pragma once
 #include <acl/containers/list_hook.hpp>
+#include <iterator>
+#include <type_traits>
 
 namespace acl::detail
 {

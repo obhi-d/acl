@@ -27,13 +27,8 @@
 #include <acl/scheduler/spin_lock.hpp>
 #include <acl/scheduler/task.hpp>
 #include <acl/scheduler/worker_context.hpp>
-#include <acl/serializers/binary_input_serializer.hpp>
-#include <acl/serializers/binary_output_serializer.hpp>
-#include <acl/serializers/binary_serializer.hpp>
-#include <acl/serializers/lite_yml_input_serializer.hpp>
-#include <acl/serializers/lite_yml_output_serializer.hpp>
-#include <acl/serializers/structured_input_serializer.hpp>
-#include <acl/serializers/structured_output_serializer.hpp>
+#include <acl/serializers/lite_yml.hpp>
+#include <acl/serializers/serializers.hpp>
 #include <acl/utility/common.hpp>
 #include <acl/utility/config.hpp>
 #include <acl/utility/delegate.hpp>

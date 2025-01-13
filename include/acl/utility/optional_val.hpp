@@ -15,11 +15,11 @@ template <typename SizeType>
 constexpr std::uint32_t k_null_int_min = std::numeric_limits<SizeType>::min();
 
 /**
- * @brief A lightweight optional type that uses a sentinel value to represent emptiness
+ * @brief A lightweight optional value_type that uses a sentinel value to represent emptiness
  *
  * @tparam Nullv The sentinel value that represents the empty/null state
  *
- * This class provides a simple optional type that uses a specific value to represent
+ * This class provides a simple optional value_type that uses a specific value to represent
  * the empty state, rather than maintaining a separate boolean flag like std::optional.
  * Useful for types that have a natural "null" value, like -1 for indices or nullptr for pointers.
  *
@@ -36,32 +36,33 @@ constexpr std::uint32_t k_null_int_min = std::numeric_limits<SizeType>::min();
  * - Comparison operators
  * - Reset and release operations
  *
- * @note The template parameter Nullv must be of a type that supports comparison
- * @note The stored value type is automatically deduced from Nullv's type
+ * @note The template parameter Nullv must be of a value_type that supports comparison
+ * @note The stored value value_type is automatically deduced from Nullv's value_type
  */
 template <auto Nullv>
 struct optional_val
 {
-  using type               = std::decay_t<decltype(Nullv)>;
+  using value_type = std::decay_t<decltype(Nullv)>;
+
   constexpr optional_val() = default;
-  constexpr optional_val(type iv) noexcept : value_(iv) {}
+  constexpr optional_val(value_type iv) noexcept : value_(iv) {}
 
   constexpr operator bool() const noexcept
   {
     return value_ != Nullv;
   }
 
-  constexpr auto operator*() const noexcept -> type
+  constexpr auto operator*() const noexcept -> value_type
   {
     return value_;
   }
 
-  [[nodiscard]] constexpr auto get() const noexcept -> type
+  [[nodiscard]] constexpr auto get() const noexcept -> value_type
   {
     return value_;
   }
 
-  constexpr explicit operator type() const noexcept
+  constexpr explicit operator value_type() const noexcept
   {
     return value_;
   }
@@ -76,25 +77,25 @@ struct optional_val
     value_ = Nullv;
   }
 
-  [[nodiscard]] constexpr auto release() const noexcept -> type
+  [[nodiscard]] constexpr auto release() const noexcept -> value_type
   {
     auto r = value_;
     value_ = Nullv;
     return r;
   }
 
-  [[nodiscard]] constexpr auto value() const -> type
+  [[nodiscard]] constexpr auto value() const -> value_type
   {
     return value_;
   }
 
-  [[nodiscard]] constexpr auto value_or(type default_value) const -> type
+  [[nodiscard]] constexpr auto value_or(value_type default_value) const -> value_type
   {
     return value_ != Nullv ? value_ : default_value;
   }
 
   constexpr auto operator<=>(const optional_val& other) const noexcept = default;
 
-  type value_ = Nullv;
+  value_type value_ = Nullv;
 };
 } // namespace acl

@@ -2,6 +2,7 @@
 
 #include <acl/allocators/allocator.hpp>
 #include <acl/allocators/default_allocator.hpp>
+#include <acl/allocators/detail/custom_allocator.hpp>
 #include <acl/containers/config.hpp>
 #include <acl/containers/detail/blackboard_defs.hpp>
 #include <acl/utility/config.hpp>

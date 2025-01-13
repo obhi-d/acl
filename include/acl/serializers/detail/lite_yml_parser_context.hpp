@@ -2,6 +2,9 @@
 
 #include <acl/allocators/linear_arena_allocator.hpp>
 #include <acl/dsl/lite_yml.hpp>
+#include <acl/reflection/detail/map_value_type.hpp>
+#include <acl/utility/detail/concepts.hpp>
+#include <type_traits>
 
 namespace acl::detail
 {
@@ -85,6 +88,7 @@ class icontext : public in_context_base
   using key_field_name   = key_field_name_t<Config>;
   using value_field_name = value_field_name_t<Config>;
   using type_field_name  = type_field_name_t<Config>;
+  using transform_type   = transform_t<Config>;
 
 public:
   icontext(class_type& obj, parser_state& state, in_context_base* parent) noexcept
@@ -102,8 +106,9 @@ public:
     return obj_;
   }
 
-  void begin_key(std::string_view key) override
+  void set_key(std::string_view ikey) override
   {
+    auto key = transform_type::transform(ikey);
     if constexpr (ExplicitlyReflected<class_type>)
     {
       if constexpr (StringMapValueType<class_type>)
@@ -112,8 +117,12 @@ public:
       }
       else
       {
-        read_bound_class(key);
+        read_explicitly_reflected(key);
       }
+    }
+    else if constexpr (Aggregate<Class>)
+    {
+      read_aggregate(key);
     }
     else if constexpr (VariantLike<class_type>)
     {
@@ -121,8 +130,11 @@ public:
     }
   }
 
-  void end_key() override
+  void begin_object() override {}
+
+  void end_object() override
   {
+    post_read(obj_);
     if (pop_fn_)
     {
       pop_fn_(this);
@@ -169,9 +181,16 @@ public:
       return;
     }
 
-    if constexpr (Transformable<class_type>)
+    if constexpr (Convertible<class_type>)
     {
-      acl::transform<class_type>::from_string(obj_, slice);
+      if constexpr (requires { typename Config::mutate_enums_type; } && std::is_enum_v<class_type>)
+      {
+        acl::convert<class_type>::from_string(obj_, transform_type::transform(slice));
+      }
+      else
+      {
+        acl::convert<class_type>::from_string(obj_, slice);
+      }
     }
     else if constexpr (ConstructedFromStringView<class_type> || ContainerIsStringLike<class_type>)
     {
@@ -503,7 +522,7 @@ public:
     };
   }
 
-  void read_bound_class(std::string_view key)
+  void read_explicitly_reflected(std::string_view key)
   {
     for_each_field(
      [this, key]<typename Decl>(class_type& obj, Decl const& decl, auto) noexcept
@@ -515,8 +534,7 @@ public:
          auto mapping     = parser_state_.get().template push<icontext<value_t, Config>>(parser_state_.get(), this);
          mapping->pop_fn_ = [](in_context_base* mapping)
          {
-           // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-           auto object = reinterpret_cast<icontext<value_t, Config>*>(mapping);
+           auto object = static_cast<icontext<value_t, Config>*>(mapping);
            auto parent = static_cast<icontext<Class, Config>*>(object->parent_);
            Decl decl;
            decl.value(parent->get(), std::move(object->get()));
@@ -525,6 +543,32 @@ public:
        }
      },
      obj_);
+  }
+
+  void read_aggregate(std::string_view key)
+  {
+    constexpr auto field_names = get_field_names<Class>();
+
+    auto read_aggregate_field = [&]<std::size_t I>(std::integral_constant<std::size_t, I> /* unused */)
+    {
+      if (std::get<I>(field_names) == key)
+      {
+        using type       = field_type<I, Class>;
+        auto mapping     = parser_state_.get().template push<icontext<type, Config>>(parser_state_.get(), this);
+        mapping->pop_fn_ = [](in_context_base* mapping)
+        {
+          auto object                     = static_cast<icontext<type, Config>*>(mapping);
+          auto parent                     = static_cast<icontext<Class, Config>*>(object->parent_);
+          get_field_ref<I>(parent->get()) = std::move(object->get());
+          parent->parser_state_.get().pop(object, parent);
+        };
+      }
+    };
+
+    [&]<std::size_t... I>(std::index_sequence<I...>)
+    {
+      (read_aggregate_field(std::integral_constant<std::size_t, I>()), ...);
+    }(std::make_index_sequence<std::tuple_size_v<decltype(field_names)>>());
   }
 
 private:

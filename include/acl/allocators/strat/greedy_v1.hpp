@@ -1,9 +1,8 @@
 #pragma once
 
-#include <acl/allocators/arena_options.hpp>
-#include <acl/allocators/best_fit_options.hpp>
+#include <acl/allocators/config.hpp>
 #include <acl/allocators/detail/arena.hpp>
-
+#include <acl/utility/optional_val.hpp>
 namespace acl::strat
 {
 
@@ -15,7 +14,8 @@ namespace acl::strat
 template <typename Config = acl::config<>>
 class greedy_v1
 {
-  using optional_addr = acl::detail::optional_val<acl::detail::k_null_0>;
+  static constexpr uint32_t k_null_0 = 0;
+  using optional_addr                = acl::optional_val<k_null_0>;
 
 public:
   using extension       = uint64_t;

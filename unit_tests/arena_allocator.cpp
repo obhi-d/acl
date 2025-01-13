@@ -1,4 +1,10 @@
 #include <acl/allocators/arena_allocator.hpp>
+#include <acl/allocators/strat/best_fit_tree.hpp>
+#include <acl/allocators/strat/best_fit_v0.hpp>
+#include <acl/allocators/strat/best_fit_v1.hpp>
+#include <acl/allocators/strat/best_fit_v2.hpp>
+#include <acl/allocators/strat/greedy_v0.hpp>
+#include <acl/allocators/strat/greedy_v1.hpp>
 #include <catch2/catch_all.hpp>
 #include <iostream>
 #include <unordered_set>
@@ -108,7 +114,7 @@ void run_test(unsigned int seed)
   // static_assert(allocator_t::can_defragment, "Has defragment");
 
   static_assert(std::same_as<alloc_mem_manager, typename allocator_t::arena_manager>, "Managers are not equal");
-  std::cout << " Seed : " << acl::type_name<TestType>() << " : " << seed << std::endl;
+  std::cout << " Seed : " << (std::string_view)acl::type_name<TestType>() << " : " << seed << std::endl;
   std::minstd_rand                        gen(seed);
   std::bernoulli_distribution             dice(0.7);
   std::bernoulli_distribution             biased_dice(0.05);

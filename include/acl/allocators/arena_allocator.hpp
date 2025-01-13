@@ -1,8 +1,8 @@
 ﻿#pragma once
 
-#include <acl/allocators/arena_options.hpp>
+#include <acl/allocators/config.hpp>
 #include <acl/allocators/detail/arena.hpp>
-#include <acl/allocators/detail/arena_manager_concept.hpp>
+#include <acl/allocators/detail/arena_manager_defs.hpp>
 
 #include <bit>
 #include <concepts>
@@ -624,7 +624,7 @@ public:
           auto ta = refresh.strat_.try_allocate(refresh.bank_, blk.size());
           if (!ta && !arena_allocated)
           {
-            auto p = add_arena(refresh, acl::detail::k_null_uh, std::max(arena.size(), blk.size()), true);
+            auto p = add_arena(refresh, std::numeric_limits<uint32_t>::max(), std::max(arena.size(), blk.size()), true);
             refresh.bank_.arenas()[p.first].data_ = arena.data_;
             ta                                    = refresh.strat_.try_allocate(refresh.bank_, blk.size());
             arena_allocated                       = true;

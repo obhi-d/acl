@@ -93,7 +93,6 @@ struct extension
 };
 
 template <typename T>
-  requires requires { typename T::manager_t; }
 struct manager
 {
   using manager_t = T;

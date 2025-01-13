@@ -1,12 +1,20 @@
 
 #pragma once
-#include <acl/allocators/linear_arena_allocator.hpp>
 #include <acl/dsl/lite_yml.hpp>
 #include <acl/serializers/detail/lite_yml_parser_context.hpp>
-#include <acl/utility/type_traits.hpp>
+#include <acl/serializers/detail/lite_yml_writer_context.hpp>
+#include <acl/serializers/serializers.hpp>
 
 namespace acl::yml
 {
+
+template <typename Class, typename Config = acl::config<>>
+auto to_string(Class const& obj) -> std::string
+{
+  auto state = acl::detail::writer_state();
+  write(state, obj);
+  return state.get();
+}
 
 template <typename Class, typename Config = acl::config<>>
 void from_string(Class& obj, std::string_view data)
@@ -15,5 +23,4 @@ void from_string(Class& obj, std::string_view data)
   auto icontext = acl::detail::icontext<Class&, Config>(obj, state, nullptr);
   state.parse(icontext);
 }
-
 } // namespace acl::yml

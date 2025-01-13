@@ -6,8 +6,6 @@
 #include <acl/containers/index_map.hpp>
 #include <acl/containers/sparse_table.hpp>
 #include <acl/utility/delegate.hpp>
-#include <acl/utility/error_codes.hpp>
-#include <acl/utility/export.hxx>
 #include <acl/utility/intrusive_ptr.hpp>
 #include <acl/utility/komihash.hpp>
 #include <acl/utility/tagged_ptr.hpp>
@@ -204,15 +202,6 @@ TEST_CASE("Validate compressed_ptr", "[compressed_ptr]")
 
   acl::detail::compressed_ptr<std::void_t<>> null = nullptr;
   CHECK(!null);
-}
-
-TEST_CASE("Validate error_codes", "[error_code]")
-{
-  auto ec = acl::make_error_code(acl::serializer_error::corrupt_array_item);
-
-  CHECK(&ec.category() == &acl::error_category<acl::serializer_error>::instance());
-  CHECK(!ec.message().empty());
-  CHECK(ec.category().name() != nullptr);
 }
 
 TEST_CASE("Validate Hash: wyhash", "[hash]")

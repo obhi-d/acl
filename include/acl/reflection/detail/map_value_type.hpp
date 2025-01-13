@@ -1,3 +1,5 @@
+#pragma once
+
 #include <acl/reflection/bind.hpp>
 #include <type_traits>
 

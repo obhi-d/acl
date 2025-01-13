@@ -26,35 +26,34 @@ set(ACL_TARGET_NAME ${PROJECT_NAME})
 include(GNUInstallDirs)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
-    set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}") # CMake 3.9+
-endif()
+# find_program(CCACHE_PROGRAM ccache)
+# if(CCACHE_PROGRAM)
+#     set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+#     set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}") # CMake 3.9+
+# endif()
 
 add_library(
     ${ACL_TARGET_NAME}
-    "src/acl/reflection/reflection.cpp"
     "src/acl/allocators/coalescing_allocator.cpp"
     "src/acl/allocators/coalescing_arena_allocator.cpp"
     "src/acl/dsl/lite_yml.cpp"
     "src/acl/dsl/microexpr.cpp"
     "src/acl/scheduler/scheduler.cpp"
+    "src/acl/scheduler/event_types.cpp"
     "src/acl/utility/string_utils.cpp"
-    "src/acl/all.cpp"
 )
 
 set_property(TARGET ${ACL_TARGET_NAME} PROPERTY CXX_STANDARD 20)
 
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
 # setup clang-tidy command from executable + options
-#if(CLANG_TIDY_EXE)
-#    set(CLANG_TIDY_COMMAND "${CLANG_TIDY_EXE}")
-#    set_target_properties(
-#        ${ACL_TARGET_NAME}
-#        PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
-#    )
-#endif()
+if(CLANG_TIDY_EXE)
+    set(CLANG_TIDY_COMMAND "${CLANG_TIDY_EXE}")
+    set_target_properties(
+        ${ACL_TARGET_NAME}
+        PROPERTIES CXX_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
+    )
+endif()
 
 add_library(${PROJECT_NAME}::${ACL_TARGET_NAME} ALIAS ${ACL_TARGET_NAME})
 

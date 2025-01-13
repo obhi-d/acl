@@ -1,8 +1,9 @@
 ﻿#pragma once
 
-#include <acl/allocators/arena_options.hpp>
+#include <acl/allocators/config.hpp>
 #include <acl/allocators/detail/arena.hpp>
-#include <acl/containers/rbtree.hpp>
+#include <acl/containers/detail/rbtree.hpp>
+#include <acl/utility/optional_val.hpp>
 #include <acl/utility/type_traits.hpp>
 
 namespace acl::strat
@@ -15,7 +16,8 @@ namespace acl::strat
 template <typename Config = acl::config<>>
 class best_fit_tree
 {
-  using optional_addr = acl::detail::optional_val<acl::detail::k_null_0>;
+  static constexpr uint32_t k_null_0 = 0;
+  using optional_addr                = acl::optional_val<k_null_0>;
 
 public:
   best_fit_tree() noexcept                = default;

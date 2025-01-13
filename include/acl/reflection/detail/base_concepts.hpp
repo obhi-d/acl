@@ -16,9 +16,6 @@ template <template <typename...> class T, typename... Us>
 struct is_specialization_of<T, T<Us...>> : std::true_type
 {};
 
-template <typename T>
-concept HasConfig = requires(T t) { typename T::config_type; };
-
 template <typename Class, typename Serializer>
 concept InputSerializableClass = requires(Class& o, Serializer s) { s >> o; };
 
@@ -116,7 +113,10 @@ concept ConvertibleToString =
                                           !CastableToString<T> && !ContainerIsStringLike<T>);
 
 template <typename T>
-concept Transformable = is_specialization_of<acl::transform, T>::value;
+concept Convertible = requires(T t) {
+  acl::convert<T>::to_string(t);
+  acl::convert<T>::from_string(t, std::string_view());
+};
 
 // Array
 template <typename Class>
@@ -157,30 +157,6 @@ template <typename T>
 concept ConstructedFromString = requires { T(std::string()); } && (!OptionalLike<T>);
 
 template <typename Class>
-concept HasReserve = requires(Class obj) { obj.reserve(std::size_t()); };
-template <typename Class>
-concept HasResize = requires(Class obj) { obj.resize(std::uint32_t()); };
-
-template <typename Class>
-concept HasSize = requires(Class obj) {
-  { obj.size() } -> std::convertible_to<std::size_t>;
-};
-
-template <typename Class, typename ValueType>
-concept HasEmplace = requires(Class obj, ValueType value) { obj.emplace(value); };
-
-template <typename Class, typename ValueType>
-concept HasPushBack = requires(Class obj, ValueType value) { obj.push_back(value); };
-
-template <typename Class, typename ValueType>
-concept HasEmplaceBack = requires(Class obj, ValueType value) { obj.emplace_back(value); };
-
-template <typename Class>
-concept HasCapacity = requires(Class const& c) {
-  { c.capacity() } -> std::convertible_to<std::size_t>;
-};
-
-template <typename Class>
 concept MapLike = requires(Class t) {
   typename Class::key_type;
   typename Class::mapped_type;
@@ -189,12 +165,6 @@ concept MapLike = requires(Class t) {
   { t.end() } -> std::same_as<typename Class::iterator>;
   { t.find(typename Class::key_type{}) } -> std::same_as<typename Class::iterator>;
 };
-
-template <typename Class>
-concept StringMapLike = MapLike<Class> && Transformable<typename Class::key_type>;
-
-template <typename Class>
-concept ComplexMapLike = MapLike<Class> && !Transformable<typename Class::key_type>;
 
 // Pointers
 template <typename Class>
@@ -248,7 +218,7 @@ concept ArrayLike = ContainerLike<Class> && (!MapLike<Class>);
 
 // Tuple
 template <typename Class>
-concept TupleLike = is_specialization_of<std::tuple, Class>::value;
+concept TupleLike = is_specialization_of<std::tuple, Class>::value || is_specialization_of<std::pair, Class>::value;
 
 // Variant
 template <typename Class>
@@ -260,14 +230,6 @@ concept DeclBase = requires {
   typename T::MemTy;
   { T::key() } -> std::same_as<std::string_view>;
 };
-template <typename T>
-concept HasKeyFieldName = requires(T t) { typename T::key_field_name_t; };
-
-template <typename T>
-concept HasTypeFieldName = requires(T t) { typename T::type_field_name_t; };
-
-template <typename T>
-concept HasValueFieldName = requires(T t) { typename T::value_field_name_t; };
 
 template <typename Class>
 concept MonostateLike = std::same_as<Class, std::monostate>;

@@ -1,4 +1,10 @@
+#pragma once
+
+#include <acl/utility/config.hpp>
+#include <acl/utility/transforms.hpp>
 #include <acl/utility/type_traits.hpp>
+#include <concepts>
+#include <cstdint>
 
 namespace acl::detail
 {
@@ -178,5 +184,21 @@ struct pool_size<T>
 
 template <typename T>
 constexpr uint32_t pool_size_v = acl::detail::pool_size<T>::value;
+
+template <typename T>
+struct transform_type
+{
+  using type = acl::pass_through_transform;
+};
+
+template <typename T>
+  requires requires { typename T::is_string_transform; }
+struct transform_type<T>
+{
+  using type = T;
+};
+
+template <typename T>
+using transform_t = typename transform_type<T>::type;
 
 } // namespace acl::detail

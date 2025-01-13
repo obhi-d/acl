@@ -1,9 +1,7 @@
 
 #pragma once
 #include <acl/reflection/reflection.hpp>
-#include <acl/serializers/structured_output_serializer.hpp>
 #include <acl/utility/type_traits.hpp>
-#include <functional>
 
 namespace acl::detail
 {
