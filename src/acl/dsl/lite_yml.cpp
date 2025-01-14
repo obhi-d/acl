@@ -3,7 +3,48 @@
 
 namespace acl::yml
 {
-void istream::parse()
+
+// Example YAML:
+//
+// # Simple key-value pairs
+// name: John
+// age: 30
+//
+// # Nested objects
+// person:
+//   name: Jane
+//   address:
+//     street: 123 Main St
+//     city: Anytown
+//
+// # Arrays
+// colors:
+//   - red
+//   - blue
+//   - green
+//
+// # Array of objects
+// users:
+//   - name: Alice
+//     role: admin
+//   - name: Bob
+//     role: user
+//
+// # Compact arrays
+// numbers: [1, 2, 3, 4]
+//
+// # Block scalars
+// description: |
+//   This is a multi-line
+//   description that preserves
+//   line breaks
+//
+// comment: >
+//   This is a multi-line
+//   comment that folds
+//   into a single line
+//
+void lite_stream::parse()
 {
   state_        = parse_state::none;
   indent_level_ = 0;
@@ -21,7 +62,7 @@ void istream::parse()
   }
 }
 
-auto istream::next_token() -> istream::token
+auto lite_stream::next_token() -> lite_stream::token
 {
 
   // Start of line - check indentation
@@ -140,7 +181,7 @@ auto istream::next_token() -> istream::token
       current_pos_++;
       return token{.type_ = token_type::key, .content_ = slice};
     }
-    if (((c == ',' || (std::isspace(c) != 0)) && state_ == parse_state::in_compact_mapping) || c == '\n')
+    if (((c == ',' || (std::isspace(c) != 0)) && is_scope_of_type(container_type::compact_array)) || c == '\n')
     {
       break;
     }
@@ -153,7 +194,7 @@ auto istream::next_token() -> istream::token
   };
 }
 
-void istream::process_token(token tok)
+void lite_stream::process_token(token tok)
 {
   if (!tok)
   {
@@ -163,25 +204,23 @@ void istream::process_token(token tok)
   switch (tok.type_)
   {
   case token_type::lbracket:
-    if (state_ == parse_state::none || state_ == parse_state::in_value)
-    {
-      state_ = parse_state::in_compact_mapping;
-    }
+    handle_dash(0, true);
     break;
 
   case token_type::comma:
-    if (state_ != parse_state::in_compact_mapping)
+    if (!is_scope_of_type(container_type::compact_array))
     {
       throw_error(tok, "Unexpected ','");
     }
+    ctx_->begin_new_array_item();
     break;
 
   case token_type::rbracket:
-    if (state_ != parse_state::in_compact_mapping)
+    if (!is_scope_of_type(container_type::compact_array))
     {
       throw_error(tok, "Unexpected ']'");
     }
-    state_ = parse_state::none;
+    close_last_context();
     break;
 
   case token_type::indent:
@@ -189,7 +228,7 @@ void istream::process_token(token tok)
     break;
 
   case token_type::key:
-    if (state_ == parse_state::in_compact_mapping)
+    if (is_scope_of_type(container_type::compact_array))
     {
       throw_error(tok, "Unexpected key, ']' expected");
     }
@@ -201,7 +240,7 @@ void istream::process_token(token tok)
     break;
 
   case token_type::dash:
-    handle_dash(static_cast<uint16_t>(tok.content_.count_));
+    handle_dash(static_cast<uint16_t>(tok.content_.count_), false);
     break;
 
   case token_type::pipe:
@@ -220,7 +259,7 @@ void istream::process_token(token tok)
   }
 }
 
-void istream::handle_indent(uint16_t new_indent)
+void lite_stream::handle_indent(uint16_t new_indent)
 {
   if (new_indent < indent_level_)
   {
@@ -234,37 +273,26 @@ void istream::handle_indent(uint16_t new_indent)
   indent_level_ = new_indent;
 }
 
-void istream::handle_key(string_slice key)
+void lite_stream::handle_key(string_slice key)
 {
   if (state_ != parse_state::in_new_context)
   {
     ctx_->begin_object();
+    indent_stack_.emplace_back(indent_level_, container_type::object);
   }
   ctx_->set_key(get_view(key));
-  indent_stack_.emplace_back(indent_level_, container_type::object);
-  state_ = parse_state::in_value;
+  state_ = parse_state::in_key;
 }
 
-void istream::handle_value(string_slice value)
+void lite_stream::handle_value(string_slice value)
 {
   if (value.count_ == 0U)
   {
     return;
   }
 
-  if (state_ == parse_state::in_compact_mapping)
-  {
-    ctx_->begin_array();
-    indent_stack_.emplace_back(indent_level_, container_type::array);
-  }
-
   ctx_->set_value(get_view(value));
-  close_last_context();
-
-  if (state_ != parse_state::in_compact_mapping)
-  {
-    state_ = parse_state::none;
-  }
+  state_ = parse_state::none;
 }
 
 //
@@ -274,22 +302,25 @@ void istream::handle_value(string_slice value)
 //    - key: a
 //         - g: a
 
-void istream::handle_dash(uint16_t extra_indent)
+void lite_stream::handle_dash(uint16_t extra_indent, bool compact)
 {
   indent_level_ += extra_indent;
-  ctx_->begin_array();
-  indent_stack_.emplace_back(indent_level_, container_type::array);
-  state_ = parse_state::in_array;
+  if (state_ == parse_state::in_new_context || compact)
+  {
+    ctx_->begin_array();
+    indent_stack_.emplace_back(indent_level_, compact ? container_type::array : container_type::compact_array);
+  }
+  ctx_->begin_new_array_item();
 }
 
-void istream::handle_block_scalar(token_type type)
+void lite_stream::handle_block_scalar(token_type type)
 {
   state_       = parse_state::in_block_scalar;
   block_style_ = type;
   block_lines_.clear();
 }
 
-void istream::collect_block_scalar()
+void lite_stream::collect_block_scalar()
 {
   auto indent = count_indent();
   auto line   = get_current_line();
@@ -316,7 +347,7 @@ void istream::collect_block_scalar()
   }
 }
 
-void istream::close_context(uint16_t new_indent)
+void lite_stream::close_context(uint16_t new_indent)
 {
   while (!indent_stack_.empty() && indent_stack_.back().indent_ >= new_indent)
   {
@@ -333,7 +364,7 @@ void istream::close_context(uint16_t new_indent)
   }
 }
 
-void istream::close_last_context()
+void lite_stream::close_last_context()
 {
   if (!indent_stack_.empty())
   {

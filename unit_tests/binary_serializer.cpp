@@ -1,5 +1,6 @@
 
 #include "acl/containers/array_types.hpp"
+#include "acl/serializers/config.hpp"
 #include "acl/serializers/serializers.hpp"
 #include "catch2/catch_test_macros.hpp"
 #include <acl/reflection/reflection.hpp>
@@ -274,6 +275,11 @@ TEMPLATE_TEST_CASE("stream: LinearArrayLike", "[stream][array]", big_endian, lit
   REQUIRE_THROWS(acl::read<TestType::value>(stream, read));
 }
 
+template <>
+constexpr uint32_t acl::cfg::magic_type_header<std::array<int, 5>> = 0x12345678;
+template <>
+constexpr uint32_t acl::cfg::magic_type_header<std::array<int, 10>> = 0x664411;
+
 TEMPLATE_TEST_CASE("stream: Invalid LinearArrayLike", "[stream][array]", big_endian, little_endian)
 {
   FileData data;
@@ -284,9 +290,6 @@ TEMPLATE_TEST_CASE("stream: Invalid LinearArrayLike", "[stream][array]", big_end
   std::array<int, 10> read;
 
   acl::write<TestType::value>(stream, write);
-  acl::read<TestType::value>(stream, read);
-
-  REQUIRE(std::ranges::equal(std::span(read.data(), 5), std::span(write.data(), 5)));
   REQUIRE_THROWS(acl::read<TestType::value>(stream, read));
 }
 
@@ -338,6 +341,11 @@ TEMPLATE_TEST_CASE("stream: VariantLike", "[stream][variant]", big_endian, littl
   REQUIRE(read == write);
   REQUIRE_THROWS(acl::read<TestType::value>(stream, read));
 }
+
+template <>
+constexpr uint32_t acl::cfg::magic_type_header<std::vector<std::variant<int, bool, std::string>>> = 0x12345678;
+template <>
+constexpr uint32_t acl::cfg::magic_type_header<std::vector<int>> = 0x664411;
 
 TEMPLATE_TEST_CASE("stream: Invalid VariantLike ", "[stream][variant]", big_endian, little_endian)
 {
@@ -469,6 +477,11 @@ TEMPLATE_TEST_CASE("stream: SignedIntLike", "[stream][int]", big_endian, little_
   REQUIRE(read == write);
   REQUIRE_THROWS(acl::read<TestType::value>(stream, read));
 }
+
+template <>
+constexpr uint32_t acl::cfg::magic_type_header<std::array<std::int64_t, 4>> = 0x12345678;
+template <>
+constexpr uint32_t acl::cfg::magic_type_header<std::array<bool, 4>> = 0x664411;
 
 TEMPLATE_TEST_CASE("stream: SignedIntLike Invalid", "[stream][int]", big_endian, little_endian)
 {

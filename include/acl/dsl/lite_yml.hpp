@@ -34,22 +34,18 @@ public:
   virtual void end_array()                       = 0;
   virtual void begin_object()                    = 0;
   virtual void end_object()                      = 0;
+  virtual void begin_new_array_item()            = 0;
   virtual void set_key(std::string_view slice)   = 0;
   virtual void set_value(std::string_view slice) = 0;
 };
 
-class istream
+class lite_stream
 {
 public:
-  explicit istream(std::string_view content) : content_(content) {}
+  explicit lite_stream(std::string_view content, context* ctx) : content_(content), ctx_(ctx) {}
 
   // Main parse function that processes the yml content
   void parse();
-
-  void set_handler(context* ctx)
-  {
-    ctx_ = ctx;
-  }
 
 private:
   enum class token_type : uint8_t
@@ -72,9 +68,7 @@ private:
     none,
     in_new_context,
     in_key,
-    in_value,
     in_block_scalar,
-    in_compact_mapping,
     in_array
   };
 
@@ -82,6 +76,7 @@ private:
   {
     none,
     array,
+    compact_array,
     object
   };
 
@@ -103,7 +98,7 @@ private:
   void handle_indent(uint16_t new_indent);
   void handle_key(string_slice key);
   void handle_value(string_slice value);
-  void handle_dash(uint16_t extra_indent);
+  void handle_dash(uint16_t extra_indent, bool compact);
   void handle_block_scalar(token_type type);
   void collect_block_scalar();
   void close_context(uint16_t new_indent);
@@ -166,6 +161,11 @@ private:
      std::format("parse-error @{} : (around {}) - {}", token.content_.start_, get_view(token.content_), error));
   }
 
+  [[nodiscard]] auto is_scope_of_type(container_type type) const -> bool
+  {
+    return !indent_stack_.empty() && indent_stack_.back().type_ == type;
+  }
+
   struct indent_entry
   {
     uint16_t       indent_ = 0;
@@ -178,7 +178,7 @@ private:
   small_vector<string_slice, small_buffer_size> block_lines_;
 
   context*    ctx_                 = nullptr;
-  parse_state state_               = parse_state::none;
+  parse_state state_               = parse_state::in_new_context;
   uint32_t    current_pos_         = 0;
   uint16_t    indent_level_        = 0;
   token_type  block_style_         = token_type::eof;

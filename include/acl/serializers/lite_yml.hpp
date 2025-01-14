@@ -20,8 +20,8 @@ auto to_string(Class const& obj) -> std::string
 template <typename Class, typename Config = acl::config<>>
 void from_string(Class& obj, std::string_view data)
 {
-  auto state    = acl::detail::parser_state(data);
-  auto icontext = acl::detail::icontext<Class&, Config>(obj, state, nullptr);
-  state.parse(icontext);
+  auto state           = acl::detail::parser_state(data);
+  auto in_context_impl = acl::detail::in_context_impl<Class&, Config>(obj, state, nullptr);
+  state.parse(in_context_impl);
 }
 } // namespace acl::yml

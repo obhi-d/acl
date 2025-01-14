@@ -483,6 +483,14 @@ void visit_monostate(Class& obj, Visitor& visitor)
 {
   if constexpr (is_writer<Visitor>)
   {
+    visitor.set_null();
+  }
+  else
+  {
+    if (!visitor.is_null())
+    {
+      throw visitor_error(visitor_error::invalid_value);
+    }
   }
 }
 

@@ -26,13 +26,14 @@ class structured_output_serializer
 private:
   enum class type : uint8_t
   {
+    none,
     object,
     array,
     field
   };
 
   Stream* serializer_ = nullptr;
-  type    type_       = type::object;
+  type    type_       = type::none;
   bool    first_      = true;
 
 public:

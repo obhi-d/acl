@@ -1,4 +1,5 @@
 ﻿
+#include "acl/reflection/detail/base_concepts.hpp"
 #include <acl/serializers/lite_yml.hpp>
 #include <array>
 #include <catch2/catch_all.hpp>

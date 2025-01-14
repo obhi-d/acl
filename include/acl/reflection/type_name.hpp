@@ -19,10 +19,8 @@ template <typename T>
 #endif
   constexpr std::string_view name = acl::detail::function_name<T>();
   // return name;
-  constexpr auto start_pos  = name.find(start) + start.size();
-  constexpr auto type_start = name.substr(start_pos, name.find(end, start_pos) - start_pos);
-  constexpr auto type_end   = type_start.find_last_of(" :");
-  constexpr auto type       = type_start.substr(type_end + 1);
+  constexpr auto start_pos = name.find(start) + start.size();
+  constexpr auto type      = name.substr(start_pos, name.find(end, start_pos) - start_pos);
 
   constexpr auto length = type.length();
 

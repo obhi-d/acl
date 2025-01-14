@@ -9,7 +9,6 @@
 #include <acl/reflection/detail/derived_concepts.hpp>
 #include <acl/reflection/detail/visitor_helpers.hpp>
 #include <acl/reflection/reflection.hpp>
-#include <acl/reflection/type_name.hpp>
 #include <acl/reflection/visitor_impl.hpp>
 #include <acl/serializers/byteswap.hpp>
 #include <acl/serializers/config.hpp>
@@ -73,8 +72,7 @@ public:
   }
 
   binary_input_serializer(acl::detail::object_visitor_tag /*unused*/, binary_input_serializer& ser)
-      : serializer_{ser.serializer_}, object_id_(ser.object_id_), may_fast_path_(ser.may_fast_path_),
-        type_{type::object}
+      : serializer_{ser.serializer_}, may_fast_path_(ser.may_fast_path_), type_{type::object}
   {
     // No-op
   }
@@ -89,14 +87,17 @@ public:
   auto can_visit(Class& obj) -> continue_token
   {
     using class_type = std::decay_t<Class>;
-    if constexpr (acl::detail::ByteStreambleClass<class_type, Stream>)
+    if (!may_fast_path_)
     {
-      return true;
-    }
-    if (type_ == type::object)
-    {
-      constexpr uint32_t match_id = type_name<type>().hash();
-      return (read_id() == match_id);
+      if constexpr (requires { Class::magic_type_header; })
+      {
+        return (read_id() == Class::magic_type_header);
+      }
+      else if constexpr (cfg::magic_type_header<std::decay_t<Class>>)
+      {
+        constexpr uint32_t match_id = cfg::magic_type_header<std::decay_t<Class>>;
+        return (read_id() == match_id);
+      }
     }
     return true;
   }
@@ -118,15 +119,6 @@ public:
 
     using type                   = std::decay_t<Class>;
     constexpr bool may_fast_path = acl::detail::LinearArrayLike<type, Stream>;
-
-    if (!may_fast_path_)
-    {
-      constexpr uint32_t match_id = type_name<type>().hash();
-      if (read_id() != match_id)
-      {
-        throw visitor_error(visitor_error::invalid_container);
-      }
-    }
 
     // First time entering a fast path container
     may_fast_path_ = may_fast_path;

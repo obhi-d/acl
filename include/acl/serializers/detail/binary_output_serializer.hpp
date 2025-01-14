@@ -11,7 +11,6 @@
 #include <acl/utility/transforms.hpp>
 #include <acl/utility/type_traits.hpp>
 #include <cassert>
-#include <limits>
 #include <string_view>
 
 namespace acl::detail
@@ -79,13 +78,16 @@ public:
   auto can_visit(Class const& obj) -> continue_token
   {
     using class_type = std::decay_t<Class>;
-    if constexpr (acl::detail::ByteStreambleClass<class_type, Stream>)
+    if (!may_fast_path_)
     {
-      return true;
-    }
-    if (type_ == type::object)
-    {
-      write_id(type_name<type>().hash());
+      if constexpr (requires { Class::magic_type_header; })
+      {
+        write_id(Class::magic_type_header);
+      }
+      else if constexpr (acl::cfg::magic_type_header<std::decay_t<Class>>)
+      {
+        write_id(cfg::magic_type_header<std::decay_t<Class>>);
+      }
     }
     return true;
   }
@@ -96,31 +98,11 @@ public:
     (*serializer_) << obj;
   }
 
-  template <acl::detail::MapLike Class>
-  void for_each_entry(Class const& obj, auto&& fn)
-  {
-    size_type count = obj.size();
-    visit(count);
-
-    using type = std::decay_t<Class>;
-
-    for (auto const& value : obj)
-    {
-      fn(value, *this);
-    }
-  }
-
-  template <acl::detail::ArrayLike Class>
+  template <typename Class>
   void for_each_entry(Class const& obj, auto&& fn)
   {
     using type                   = std::decay_t<Class>;
     constexpr bool may_fast_path = acl::detail::LinearArrayLike<type, Stream>;
-
-    if (!may_fast_path_)
-    {
-      constexpr uint32_t match_id = type_name<type>().hash();
-      visit(match_id);
-    }
 
     // First time entering a fast path container
     may_fast_path_ = may_fast_path;

@@ -179,12 +179,14 @@ TEST_CASE("structured_output_serializer: String map")
   acl::write(stream, example);
 
   json j = json::parse(stream.get());
-  REQUIRE(j[0][0] == "everything");
-  REQUIRE(j[0][1] == "is");
-  REQUIRE(j[1][0] == "supposed");
-  REQUIRE(j[1][1] == "to");
-  REQUIRE(j[2][0] == "work");
-  REQUIRE(j[2][1] == "just fine");
+
+  // Readback the json into another unordered map
+  std::unordered_map<std::string, std::string> readback;
+  for (auto const& value : j)
+    readback[value[0]] = value[1];
+  // Ensure all elements of example match readback
+  for (auto const& [key, value] : example)
+    REQUIRE(readback[key] == value);
 }
 
 TEST_CASE("structured_output_serializer: ArrayLike")
@@ -485,7 +487,7 @@ TEST_CASE("structured_output_serializer: VariantLike Monostate")
   acl::write(stream, example);
 
   json j = json::parse(stream.get());
-  REQUIRE(j.at("type") == 0);
+  REQUIRE(j.at("type") == "0");
   REQUIRE(j.at("value") == json());
 }
 
