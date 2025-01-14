@@ -76,6 +76,11 @@ auto lite_stream::next_token() -> lite_stream::token
     {
       return token{.type_ = token_type::newline, .content_ = indent};
     }
+    if (peek(1) == '-')
+    {
+      current_pos_++;
+      return token{.type_ = token_type::dash, .content_ = indent};
+    }
     return token{.type_ = token_type::indent, .content_ = indent};
   }
 

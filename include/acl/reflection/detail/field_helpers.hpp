@@ -123,9 +123,9 @@ template <Aggregate T>
 constexpr auto get_field_refs(T& ref) noexcept -> decltype(auto)
 {
   return aggregate_lookup(
-   [](auto&&... args) constexpr -> decltype(auto)
+   []<typename... Args>(Args&&... args) constexpr -> decltype(auto)
    {
-     return std::make_tuple(args...);
+     return std::make_tuple(std::forward<Args>(args)...);
    },
    ref);
 }

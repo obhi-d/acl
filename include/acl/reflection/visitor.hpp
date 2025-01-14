@@ -79,7 +79,7 @@ struct visitor_error : std::exception
     invalid_null_sentinel,
     invalid_value,
     type_is_not_an_object,
-    type_is_not_a_container
+    type_is_not_an_array
   };
 
   explicit visitor_error(code errc) noexcept : code_(errc) {}
@@ -104,8 +104,8 @@ struct visitor_error : std::exception
       return "Invalid value";
     case type_is_not_an_object:
       return "Type is not an object";
-    case type_is_not_a_container:
-      return "Type is not a container";
+    case type_is_not_an_array:
+      return "Type is not an array";
     default:
       return "Unknown visitor error";
     }
