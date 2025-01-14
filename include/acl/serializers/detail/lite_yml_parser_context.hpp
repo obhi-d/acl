@@ -13,30 +13,26 @@ class parser_state;
 
 struct in_context_base
 {
-  using pop_fn = void (*)(in_context_base*);
+  using pop_fn = void (*)(parser_state* parser, in_context_base*);
 
-  std::reference_wrapper<parser_state> parser_state_;
-  in_context_base*                     parent_  = nullptr;
-  pop_fn                               pop_fn_  = nullptr;
-  uint32_t                             xvalue_  = 0;
-  bool                                 is_null_ = false;
+  in_context_base* parent_  = nullptr;
+  pop_fn           pop_fn_  = nullptr;
+  uint32_t         xvalue_  = 0;
+  uint16_t         depth_   = 0;
+  bool             is_null_ = false;
 
   in_context_base(const in_context_base&)                    = default;
   in_context_base(in_context_base&&)                         = delete;
   auto operator=(const in_context_base&) -> in_context_base& = default;
   auto operator=(in_context_base&&) -> in_context_base&      = delete;
 
-  in_context_base(parser_state& parser_state, in_context_base* parent) noexcept
-      : parser_state_(parser_state), parent_(parent)
-  {}
+  in_context_base(in_context_base* parent) noexcept : parent_(parent) {}
 
-  virtual void set_key(std::string_view ikey)     = 0;
-  virtual void ensure_container()                 = 0;
-  virtual void end_array()                        = 0;
-  virtual void end_object()                       = 0;
-  virtual void prepare_push()                     = 0;
-  virtual void push_value(std::string_view slice) = 0;
-  virtual ~in_context_base() noexcept             = default;
+  virtual void set_key(std::string_view ikey)    = 0;
+  virtual void ensure_container()                = 0;
+  virtual void add_item()                        = 0;
+  virtual void set_value(std::string_view slice) = 0;
+  virtual ~in_context_base() noexcept            = default;
 };
 
 constexpr uint32_t default_parser_buffer_size = 8096;
@@ -45,6 +41,7 @@ class parser_state final : public acl::yml::context
   acl::yml::lite_stream         stream_;
   acl::linear_arena_allocator<> allocator_;
   in_context_base*              context_ = nullptr;
+  uint16_t                      depth_   = 0;
 
 public:
   auto operator=(const parser_state&) -> parser_state& = delete;
@@ -56,10 +53,18 @@ public:
   {
     while (context_ != nullptr)
     {
+      pop_last();
+    }
+  }
+
+  void pop_last()
+  {
+    if (context_ != nullptr)
+    {
       auto* parent = context_->parent_;
       if (context_->pop_fn_ != nullptr)
       {
-        context_->pop_fn_(context_);
+        context_->pop_fn_(this, context_);
       }
       context_ = parent;
     }
@@ -87,6 +92,7 @@ public:
   template <typename Context>
   void pop(Context* ptr, in_context_base* parent)
   {
+    ptr->post_init_object();
     std::destroy_at(ptr);
     allocator_.deallocate(ptr, sizeof(Context), alignof(Context));
     context_ = parent;
@@ -94,34 +100,53 @@ public:
 
   void begin_array() final
   {
-    context_->ensure_container();
+    context_->depth_ = depth_++;
   }
 
   void end_array() final
   {
+    if (context_->depth_ == depth_)
+    {
+      pop_last();
+    }
     context_->end_array();
+    depth_--;
   }
 
-  void begin_object() final {}
+  void begin_object() final
+  {
+    depth_++;
+  }
 
   void end_object() final
   {
-    context_->end_object();
+    pop_last();
+    depth_--;
   }
 
   void begin_new_array_item() final
   {
-    context_->prepare_push();
+    if (context_->depth_ == depth_)
+    {
+      pop_last();
+    }
+    context_->add_item();
+    context_->depth_ = depth_;
   }
 
   void set_key(std::string_view ikey) final
   {
     context_->set_key(ikey);
+    context_->depth_ = depth_;
   }
 
   void set_value(std::string_view slice) final
   {
-    context_->push_value(slice);
+    context_->set_value(slice);
+    if (context_->depth_ == depth_)
+    {
+      pop_last();
+    }
   }
 };
 
@@ -176,16 +201,12 @@ public:
     }
   }
 
-  void end_object() final
+  void post_init_object()
   {
-    if (pop_fn_)
-    {
-      pop_fn_(this);
-    }
     post_read(obj_);
   }
 
-  void prepare_push() final
+  void add_item() final
   {
     if constexpr (ContainerLike<class_type>)
     {
@@ -194,6 +215,10 @@ public:
     else if constexpr (TupleLike<class_type>)
     {
       read_tuple();
+    }
+    else
+    {
+      throw visitor_error(visitor_error::type_is_not_an_array);
     }
   }
 
@@ -209,7 +234,7 @@ public:
     }
   }
 
-  void push_value(std::string_view slice) final
+  void set_value(std::string_view slice) final
   {
     if (slice == "null")
     {
@@ -250,13 +275,6 @@ public:
     }
     else if constexpr (MonostateLike<class_type>)
     {
-    }
-    else if constexpr (ContainerLike<class_type> || TupleLike<class_type>)
-    {
-      if (pop_fn_)
-      {
-        pop_fn_(this);
-      }
     }
   }
 
@@ -347,8 +365,7 @@ public:
      parser_state_.get().template push<in_context_impl<pvalue_type&, Config>>(*obj_, parser_state_.get(), this);
     mapping->pop_fn_ = [](in_context_base* mapping)
     {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      auto* object = reinterpret_cast<in_context_impl<pvalue_type&, Config>*>(mapping);
+      auto* object = static_cast<in_context_impl<pvalue_type&, Config>*>(mapping);
       auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
 
       bool nullify = object->is_null_;
@@ -378,8 +395,7 @@ public:
      parser_state_.get().template push<in_context_impl<pvalue_type&, Config>>(*obj_, parser_state_.get(), this);
     mapping->pop_fn_ = [](in_context_base* mapping)
     {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      auto* object = reinterpret_cast<in_context_impl<pvalue_type&, Config>*>(mapping);
+      auto* object = static_cast<in_context_impl<pvalue_type&, Config>*>(mapping);
       auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
 
       bool nullify = object->is_null_;

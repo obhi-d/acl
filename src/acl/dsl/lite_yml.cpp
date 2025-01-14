@@ -311,6 +311,7 @@ void lite_stream::handle_dash(uint16_t extra_indent, bool compact)
     indent_stack_.emplace_back(indent_level_, compact ? container_type::array : container_type::compact_array);
   }
   ctx_->begin_new_array_item();
+  state_ = parse_state::in_new_context;
 }
 
 void lite_stream::handle_block_scalar(token_type type)

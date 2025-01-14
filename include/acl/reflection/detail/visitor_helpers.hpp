@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include "field_helpers.hpp"
 #include <acl/reflection/detail/aggregate.hpp>
 #include <acl/reflection/detail/base_concepts.hpp>
 #include <acl/reflection/detail/container_utils.hpp>
@@ -505,10 +506,11 @@ void visit_aggregate(Class& obj, Visitor& visitor)
   }
 
   constexpr auto field_names = get_field_names<std::decay_t<Class>>();
+  auto           field_refs  = get_field_refs<std::decay_t<Class>>(obj);
 
   [&]<std::size_t... I>(std::index_sequence<I...>)
   {
-    ((process_field(obj, get_field_ref<I>(obj), object_visitor, std::get<I>(field_names))), ...);
+    ((process_field(obj, std::get<I>(field_refs), object_visitor, std::get<I>(field_names))), ...);
   }(std::make_index_sequence<std::tuple_size_v<decltype(field_names)>>());
 
   if constexpr (is_reader<Visitor>)
