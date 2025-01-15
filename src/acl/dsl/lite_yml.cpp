@@ -72,14 +72,19 @@ auto lite_stream::next_token() -> lite_stream::token
     at_line_start_   = false;
     can_be_sequence_ = true;
     auto indent      = count_indent();
-    if (peek(1) == '\n')
-    {
-      return token{.type_ = token_type::newline, .content_ = indent};
-    }
-    if (peek(1) == '-')
+    if (peek(0) == '\n')
     {
       current_pos_++;
-      return token{.type_ = token_type::dash, .content_ = indent};
+      return token{.type_ = token_type::newline, .content_ = indent};
+    }
+    if (peek(0) == '-')
+    {
+      current_pos_++;
+      auto after_dash_indent = count_indent();
+      return token{
+       .type_    = token_type::dash,
+       .content_ = {.start_ = indent.start_, .count_ = indent.count_ + 1 + after_dash_indent.count_}
+      };
     }
     return token{.type_ = token_type::indent, .content_ = indent};
   }
@@ -102,7 +107,7 @@ auto lite_stream::next_token() -> lite_stream::token
       current_pos_++;
       auto indent = count_indent();
       auto tok    = token{
-          .type_ = token_type::dash, .content_ = {.start_ = current_pos_, .count_ = 1 + indent.count_}
+          .type_ = token_type::dash, .content_ = {.start_ = current_pos_ - 1, .count_ = 1 + indent.count_}
       };
       return tok;
     }
@@ -209,7 +214,7 @@ void lite_stream::process_token(token tok)
   switch (tok.type_)
   {
   case token_type::lbracket:
-    handle_dash(0, true);
+    handle_dash(indent_level_, true);
     break;
 
   case token_type::comma:
@@ -280,7 +285,7 @@ void lite_stream::handle_indent(uint16_t new_indent)
 
 void lite_stream::handle_key(string_slice key)
 {
-  if (state_ != parse_state::in_new_context)
+  if (state_ == parse_state::in_new_context)
   {
     ctx_->begin_object();
     indent_stack_.emplace_back(indent_level_, container_type::object);
@@ -307,13 +312,17 @@ void lite_stream::handle_value(string_slice value)
 //    - key: a
 //         - g: a
 
-void lite_stream::handle_dash(uint16_t extra_indent, bool compact)
+void lite_stream::handle_dash(uint16_t new_indent, bool compact)
 {
-  indent_level_ += extra_indent;
+  handle_indent(new_indent);
   if (state_ == parse_state::in_new_context || compact)
   {
     ctx_->begin_array();
-    indent_stack_.emplace_back(indent_level_, compact ? container_type::array : container_type::compact_array);
+    indent_stack_.emplace_back(indent_level_, compact ? container_type::compact_array : container_type::array);
+  }
+  if (is_scope_of_type(container_type::object, indent_level_))
+  {
+    ctx_->end_object();
   }
   ctx_->begin_new_array_item();
   state_ = parse_state::in_new_context;
@@ -347,7 +356,6 @@ void lite_stream::collect_block_scalar()
       result += get_view(block_lines_[i]);
     }
     ctx_->set_value(result);
-    close_last_context();
     block_lines_.clear();
     state_ = parse_state::none;
   }
@@ -358,7 +366,7 @@ void lite_stream::close_context(uint16_t new_indent)
   while (!indent_stack_.empty() && indent_stack_.back().indent_ >= new_indent)
   {
     auto current = indent_stack_.back();
-    if (current.type_ == container_type::array)
+    if (current.type_ == container_type::array || current.type_ == container_type::compact_array)
     {
       ctx_->end_array();
     }
@@ -375,7 +383,7 @@ void lite_stream::close_last_context()
   if (!indent_stack_.empty())
   {
     auto current = indent_stack_.back();
-    if (current.type_ == container_type::array)
+    if (current.type_ == container_type::array || current.type_ == container_type::compact_array)
     {
       ctx_->end_array();
     }

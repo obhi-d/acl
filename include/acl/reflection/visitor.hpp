@@ -78,6 +78,7 @@ struct visitor_error : std::exception
     invalid_aggregate,
     invalid_null_sentinel,
     invalid_value,
+    invalid_key,
     type_is_not_an_object,
     type_is_not_an_array
   };
@@ -102,6 +103,8 @@ struct visitor_error : std::exception
       return "Invalid null sentinel";
     case invalid_value:
       return "Invalid value";
+    case invalid_key:
+      return "Invalid key";
     case type_is_not_an_object:
       return "Type is not an object";
     case type_is_not_an_array:

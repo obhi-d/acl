@@ -23,4 +23,5 @@ constexpr uint8_t not_null_sentinel = '!';
 template <typename T>
 constexpr uint32_t magic_type_header = 0;
 
+constexpr uint32_t default_lite_yml_parser_buffer_size = 8096;
 } // namespace acl::cfg

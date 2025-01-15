@@ -98,7 +98,7 @@ private:
   void handle_indent(uint16_t new_indent);
   void handle_key(string_slice key);
   void handle_value(string_slice value);
-  void handle_dash(uint16_t extra_indent, bool compact);
+  void handle_dash(uint16_t new_indent, bool compact);
   void handle_block_scalar(token_type type);
   void collect_block_scalar();
   void close_context(uint16_t new_indent);
@@ -164,6 +164,11 @@ private:
   [[nodiscard]] auto is_scope_of_type(container_type type) const -> bool
   {
     return !indent_stack_.empty() && indent_stack_.back().type_ == type;
+  }
+
+  [[nodiscard]] auto is_scope_of_type(container_type type, uint16_t indent) const -> bool
+  {
+    return !indent_stack_.empty() && indent_stack_.back().indent_ == indent && indent_stack_.back().type_ == type;
   }
 
   struct indent_entry

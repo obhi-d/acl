@@ -3,6 +3,7 @@
 #include <acl/allocators/linear_arena_allocator.hpp>
 #include <acl/dsl/lite_yml.hpp>
 #include <acl/reflection/visitor.hpp>
+#include <acl/serializers/config.hpp>
 #include <acl/utility/detail/concepts.hpp>
 #include <cstddef>
 #include <string>
@@ -14,14 +15,12 @@ class parser_state;
 
 struct in_context_base
 {
-  using pop_fn = void (*)(parser_state* parser, in_context_base*);
+  using post_init_fn          = void (*)(in_context_base*, parser_state*);
+  in_context_base* parent_    = nullptr;
+  post_init_fn     post_init_ = nullptr;
+  uint32_t         xvalue_    = 0;
 
-  in_context_base* parent_  = nullptr;
-  pop_fn           pop_fn_  = nullptr;
-  uint32_t         xvalue_  = 0;
-  uint16_t         depth_   = 0;
-  bool             is_null_ = false;
-
+  in_context_base() noexcept                                 = default;
   in_context_base(const in_context_base&)                    = default;
   in_context_base(in_context_base&&)                         = delete;
   auto operator=(const in_context_base&) -> in_context_base& = default;
@@ -29,123 +28,105 @@ struct in_context_base
 
   in_context_base(in_context_base* parent) noexcept : parent_(parent) {}
 
-  virtual void set_key(parser_state* parser, std::string_view ikey) = 0;
-  virtual void add_item(parser_state* parser)                       = 0;
-  virtual void set_value(std::string_view slice)                    = 0;
-  virtual ~in_context_base() noexcept                               = default;
+  virtual auto set_key(parser_state* parser, std::string_view ikey) -> in_context_base* = 0;
+  virtual void set_value(parser_state* parser, std::string_view slice)                  = 0;
+  virtual void post_init_object(parser_state* parser)                                   = 0;
+  virtual auto add_item(parser_state* parser) -> in_context_base*                       = 0;
+  virtual ~in_context_base() noexcept                                                   = default;
 };
 
-constexpr uint32_t default_parser_buffer_size = 8096;
 class parser_state final : public acl::yml::context
 {
   acl::yml::lite_stream         stream_;
   acl::linear_arena_allocator<> allocator_;
   in_context_base*              context_ = nullptr;
-  uint16_t                      depth_   = 0;
 
 public:
   auto operator=(const parser_state&) -> parser_state& = delete;
   auto operator=(parser_state&&) -> parser_state&      = delete;
   parser_state(const parser_state&)                    = delete;
   parser_state(parser_state&&)                         = delete;
-  parser_state(std::string_view content) noexcept : stream_(content, this), allocator_(default_parser_buffer_size) {}
+  parser_state(std::string_view content) noexcept
+      : stream_(content, this), allocator_(cfg::default_lite_yml_parser_buffer_size)
+  {}
   ~parser_state() noexcept final
   {
-    while (context_ != nullptr)
-    {
-      pop_last();
-    }
+    clear();
   }
 
-  void pop_last()
+  [[nodiscard]] auto get_stored_value() const noexcept -> uint32_t
   {
-    if (context_ != nullptr)
-    {
-      auto* parent = context_->parent_;
-      if (context_->pop_fn_ != nullptr)
-      {
-        context_->pop_fn_(this, context_);
-      }
-      context_ = parent;
-    }
+    return context_->xvalue_;
   }
 
   template <typename C>
   void parse(C& handler)
   {
     context_ = &handler;
-    handler.setup_proxy(this);
     stream_.parse();
   }
 
   template <typename Context, typename... Args>
-  auto push(Args&&... args) -> Context*
+  auto create(Args&&... args) -> Context*
   {
     void* cursor = allocator_.allocate(sizeof(Context), alignof(Context));
     // NOLINTNEXTLINE
-    auto in_context_impl = std::construct_at(reinterpret_cast<Context*>(cursor), std::forward<Args>(args)...);
-    in_context_impl->setup_proxy(this);
-    context_ = in_context_impl;
-    return in_context_impl;
+    return std::construct_at(reinterpret_cast<Context*>(cursor), context_, std::forward<Args>(args)...);
+  }
+
+  void pop()
+  {
+    if (context_ != nullptr)
+    {
+      auto* parent = context_->parent_;
+      context_->post_init_object(this);
+      context_ = parent;
+    }
   }
 
   template <typename Context>
-  void pop(Context* ptr, in_context_base* parent)
+  void destroy(Context* ptr)
   {
-    ptr->post_init_object();
     std::destroy_at(ptr);
     allocator_.deallocate(ptr, sizeof(Context), alignof(Context));
-    context_ = parent;
   }
 
-  void begin_array() final
-  {
-    context_->depth_ = depth_++;
-  }
+  void begin_array() final {}
 
   void end_array() final
   {
-    if (context_->depth_ == depth_)
-    {
-      pop_last();
-    }
-    depth_--;
+    pop();
   }
 
-  void begin_object() final
-  {
-    depth_++;
-  }
+  void begin_object() final {}
 
   void end_object() final
   {
-    pop_last();
-    depth_--;
+    pop();
+  }
+
+  void clear()
+  {
+    while (context_ != nullptr)
+    {
+      pop();
+    }
   }
 
   void begin_new_array_item() final
   {
-    if (context_->depth_ == depth_)
-    {
-      pop_last();
-    }
-    context_->add_item(this);
-    context_->depth_ = depth_;
+    context_ = context_->add_item(this);
   }
 
   void set_key(std::string_view ikey) final
   {
-    context_->set_key(this, ikey);
-    context_->depth_ = depth_;
+    context_ = context_->set_key(this, ikey);
   }
 
   void set_value(std::string_view slice) final
   {
-    context_->set_value(slice);
-    if (context_->depth_ == depth_)
-    {
-      pop_last();
-    }
+    context_->set_value(this, slice);
+    pop();
   }
 };
 
@@ -155,11 +136,17 @@ class in_context_impl : public in_context_base
   using pop_fn         = std::function<void(void*)>;
   using class_type     = std::decay_t<Class>;
   using transform_type = transform_t<Config>;
+  using this_type      = in_context_impl<Class, Config>;
 
 public:
-  in_context_impl(class_type& obj, in_context_base* parent) noexcept
+  in_context_impl(class_type& obj) noexcept
     requires(std::is_reference_v<Class>)
-      : obj_(obj), in_context_base(parent)
+      : obj_(obj)
+  {}
+
+  in_context_impl(in_context_base* parent, class_type& obj) noexcept
+    requires(std::is_reference_v<Class>)
+      : in_context_base(parent), obj_(obj)
   {}
 
   in_context_impl(in_context_base* parent) noexcept
@@ -172,27 +159,31 @@ public:
     return obj_;
   }
 
-  void set_key(parser_state* parser, std::string_view ikey) final
+  template <typename Base, typename TClassType>
+  static auto read_key(TClassType& obj, parser_state* parser, std::string_view ikey) -> in_context_base*
   {
-    auto key = transform_type::transform(ikey);
-    if constexpr (ExplicitlyReflected<class_type>)
+    using tclass_type = std::decay_t<TClassType>;
+    auto key          = transform_type::transform(ikey);
+
+    if constexpr (ExplicitlyReflected<tclass_type>)
     {
-      if constexpr (StringMapValueType<class_type>)
-      {
-        read_string_map_value(parser, key);
-      }
-      else
-      {
-        read_explicitly_reflected(parser, key);
-      }
+      return read_explicitly_reflected<Base>(obj, parser, key);
     }
-    else if constexpr (Aggregate<class_type>)
+    else if constexpr (Aggregate<tclass_type>)
     {
-      read_aggregate(parser, key);
+      return read_aggregate<Base>(obj, parser, key);
     }
-    else if constexpr (VariantLike<class_type>)
+    else if constexpr (VariantLike<tclass_type>)
     {
-      read_variant(parser, key);
+      return read_variant(obj, parser, key);
+    }
+    else if constexpr (PointerLike<tclass_type>)
+    {
+      return read_key_in_pointer<Base>(obj, parser, key);
+    }
+    else if constexpr (OptionalLike<tclass_type>)
+    {
+      return read_key_in_optional<Base>(obj, parser, key);
     }
     else
     {
@@ -200,134 +191,148 @@ public:
     }
   }
 
-  void post_init_object()
+  void post_init_object(parser_state* parser) final
   {
+    if (post_init_)
+    {
+      post_init_(this, parser);
+    }
+
     post_read(obj_);
+    if (parent_ != nullptr)
+    {
+      parser->destroy(this);
+    }
   }
 
-  void add_item(parser_state* parser) final
+  auto set_key(parser_state* parser, std::string_view ikey) -> in_context_base* final
+  {
+    return read_key<this_type>(obj_, parser, ikey);
+  }
+
+  void set_value(parser_state* parser, std::string_view slice) final
+  {
+    read_value(obj_, parser, slice);
+  }
+
+  auto add_item(parser_state* parser) -> in_context_base* final
   {
     if constexpr (ContainerLike<class_type>)
     {
-      push_container_item(parser);
+      return push_container_item(parser);
     }
     else if constexpr (TupleLike<class_type>)
     {
-      read_tuple(parser);
+      return read_tuple(parser);
     }
     else
     {
       throw visitor_error(visitor_error::type_is_not_an_array);
     }
+    return nullptr;
   }
 
-  void setup_proxy(parser_state* parser)
+  template <typename TClassType>
+  static void read_value(TClassType& obj, parser_state* parser, std::string_view slice)
   {
-    if constexpr (PointerLike<class_type>)
+    using tclass_type = std::decay_t<TClassType>;
+    if constexpr (Convertible<tclass_type>)
     {
-      return read_pointer(parser);
-    }
-    else if constexpr (OptionalLike<class_type>)
-    {
-      return read_optional(parser);
-    }
-  }
-
-  void set_value(std::string_view slice) final
-  {
-    if (slice == "null")
-    {
-      is_null_ = true;
-      return;
-    }
-
-    if constexpr (Convertible<class_type>)
-    {
-      if constexpr (requires { typename Config::mutate_enums_type; } && std::is_enum_v<class_type>)
+      if constexpr (requires { typename Config::mutate_enums_type; } && std::is_enum_v<tclass_type>)
       {
-        acl::convert<class_type>::from_string(obj_, transform_type::transform(slice));
+        acl::convert<tclass_type>::from_string(obj, transform_type::transform(slice));
       }
       else
       {
-        acl::convert<class_type>::from_string(obj_, slice);
+        acl::convert<tclass_type>::from_string(obj, slice);
       }
     }
-    else if constexpr (ConstructedFromStringView<class_type> || ContainerIsStringLike<class_type>)
+    else if constexpr (PointerLike<tclass_type>)
     {
-      obj_ = class_type(slice);
+      read_pointer(obj, parser, slice);
     }
-    else if constexpr (BoolLike<class_type>)
+    else if constexpr (OptionalLike<tclass_type>)
     {
-      return read_bool(slice);
+      read_optional(obj, parser, slice);
     }
-    else if constexpr (IntegerLike<class_type>)
+    else if constexpr (BoolLike<tclass_type>)
     {
-      return read_integer(slice);
+      read_bool(obj, slice);
     }
-    else if constexpr (EnumLike<class_type>)
+    else if constexpr (IntegerLike<tclass_type>)
     {
-      return read_enum(slice);
+      read_integer(obj, slice);
     }
-    else if constexpr (FloatLike<class_type>)
+    else if constexpr (EnumLike<tclass_type>)
     {
-      return read_float(slice);
+      read_enum(obj, slice);
     }
-    else if constexpr (MonostateLike<class_type>)
+    else if constexpr (FloatLike<tclass_type>)
+    {
+      read_float(obj, slice);
+    }
+    else if constexpr (MonostateLike<tclass_type>)
     {
     }
   }
 
-  void read_bool(std::string_view slice)
-  {
-    using namespace std::string_view_literals;
-    obj_ = slice == "true"sv || slice == "True"sv;
-  }
-
-  void error_check(std::from_chars_result result)
+  static void error_check(std::from_chars_result result)
   {
     if (result.ec != std::errc())
     {
-      throw std::runtime_error("Failed to parse value");
+      throw visitor_error(visitor_error::invalid_value);
     }
   }
 
-  void read_integer(std::string_view slice)
+  template <typename TClassType>
+  static void read_bool(TClassType& obj, std::string_view slice)
+  {
+    using tclass_type = std::decay_t<TClassType>;
+
+    using namespace std::string_view_literals;
+    obj = slice == "true"sv || slice == "True"sv || slice == "null"sv;
+  }
+
+  template <typename TClassType>
+  static void read_integer(TClassType& obj, std::string_view slice)
   {
     constexpr uint32_t base_10 = 10;
     constexpr uint32_t base_16 = 10;
     using namespace std::string_view_literals;
     if (slice.starts_with("0x"sv))
     {
-      error_check(std::from_chars(slice.data(), slice.data() + slice.size(), obj_, base_16));
+      error_check(std::from_chars(slice.data(), slice.data() + slice.size(), obj, base_16));
     }
     else
     {
-      error_check(std::from_chars(slice.data(), slice.data() + slice.size(), obj_, base_10));
+      error_check(std::from_chars(slice.data(), slice.data() + slice.size(), obj, base_10));
     }
   }
 
-  void read_float(std::string_view slice)
+  template <typename TClassType>
+  static void read_float(TClassType& obj, std::string_view slice)
   {
     using namespace std::string_view_literals;
     if (slice == ".nan"sv || slice == "nan"sv)
     {
-      obj_ = std::numeric_limits<class_type>::quiet_NaN();
+      obj = std::numeric_limits<class_type>::quiet_NaN();
     }
     else if (slice == ".inf"sv || slice == "inf"sv)
     {
-      obj_ = std::numeric_limits<class_type>::infinity();
+      obj = std::numeric_limits<class_type>::infinity();
     }
     else if (slice == "-.inf"sv || slice == "-inf"sv)
     {
-      obj_ = -std::numeric_limits<class_type>::infinity();
+      obj = -std::numeric_limits<class_type>::infinity();
     }
     else
     {
-      error_check(std::from_chars(slice.data(), slice.data() + slice.size(), obj_));
+      error_check(std::from_chars(slice.data(), slice.data() + slice.size(), obj));
     }
   }
 
-  void read_enum(std::string_view slice)
+  template <typename TClassType>
+  static void read_enum(TClassType& obj, std::string_view slice)
   {
     constexpr uint32_t base_10 = 10;
     constexpr uint32_t base_16 = 10;
@@ -341,275 +346,323 @@ public:
     {
       error_check(std::from_chars(slice.data(), slice.data() + slice.size(), value, base_10));
     }
-    obj_ = static_cast<class_type>(value);
+    obj = static_cast<class_type>(value);
   }
 
-  void read_pointer(parser_state* parser)
+  template <typename Base, typename TClassType>
+  static auto read_key_in_pointer(TClassType& obj, parser_state* parser, std::string_view key)
   {
-    using class_type  = std::decay_t<class_type>;
-    using pvalue_type = pointer_class_type<class_type>;
-    if (!obj_)
+    using tclass_type = std::decay_t<TClassType>;
+    using pvalue_type = pointer_class_type<tclass_type>;
+    using namespace std::string_view_literals;
+
+    if (!obj)
     {
       if constexpr (std::same_as<class_type, std::shared_ptr<pvalue_type>>)
       {
-        obj_ = std::make_shared<pvalue_type>();
+        obj = std::make_shared<pvalue_type>();
       }
       else
       {
-        obj_ = class_type(new pointer_class_type<class_type>());
+        obj = tclass_type(new pointer_class_type<class_type>());
       }
     }
 
-    auto mapping     = parser->template push<in_context_impl<pvalue_type&, Config>>(*obj_, this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
-    {
-      auto* object = static_cast<in_context_impl<pvalue_type&, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
-
-      bool nullify = object->is_null_;
-      parser->pop(object, parent);
-
-      if (nullify)
-      {
-        parent->obj_ = nullptr;
-      }
-
-      if (parent->pop_fn_)
-      {
-        parent->pop_fn_(parser, parent);
-      }
-    };
+    return read_key<Base>(*obj, parser, key);
   }
 
-  void read_optional(parser_state* parser)
+  template <typename TClassType>
+  static void read_pointer(TClassType& obj, parser_state* parser, std::string_view slice)
   {
-    using pvalue_type = typename class_type::value_type;
-    if (!obj_)
+    using tclass_type = std::decay_t<TClassType>;
+    using pvalue_type = pointer_class_type<tclass_type>;
+    using namespace std::string_view_literals;
+
+    if (slice == "null"sv)
     {
-      obj_.emplace();
+      obj = nullptr;
+      return;
     }
 
-    auto mapping     = parser->template push<in_context_impl<pvalue_type&, Config>>(*obj_, this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    if (!obj)
     {
-      auto* object = static_cast<in_context_impl<pvalue_type&, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
-
-      bool nullify = object->is_null_;
-      parser->pop(object, parent);
-
-      if (nullify)
+      if constexpr (std::same_as<class_type, std::shared_ptr<pvalue_type>>)
       {
-        parent->obj_.reset();
+        obj = std::make_shared<pvalue_type>();
       }
-
-      if (parent->pop_fn_)
+      else
       {
-        parent->pop_fn_(parser, parent);
+        obj = tclass_type(new pointer_class_type<class_type>());
       }
-    };
+    }
+
+    read_value(*obj, parser, slice);
   }
 
-  void read_tuple(parser_state* parser)
+  template <typename Base, typename TClassType>
+  static auto read_key_in_optional(TClassType& obj, parser_state* parser, std::string_view key)
   {
-    read_tuple_value<std::tuple_size_v<class_type>>(parser, xvalue_++);
+    using tclass_type = std::decay_t<TClassType>;
+    using pvalue_type = pointer_class_type<tclass_type>;
+    using namespace std::string_view_literals;
+
+    if (!obj)
+    {
+      obj.emplace();
+    }
+
+    return read_key<Base>(*obj, parser, key);
   }
 
-  void read_variant(parser_state* parser, std::string_view key)
+  template <typename TClassType>
+  static void read_optional(TClassType& obj, parser_state* parser, std::string_view slice)
+  {
+    using tclass_type = std::decay_t<TClassType>;
+    using pvalue_type = typename tclass_type::value_type;
+    using namespace std::string_view_literals;
+
+    if (slice == "null"sv)
+    {
+      obj = {};
+      return;
+    }
+
+    if (!obj)
+    {
+      obj.emplace();
+    }
+
+    read_value(*obj, parser, slice);
+  }
+
+  template <typename TClassType>
+  static auto read_variant(TClassType& obj, parser_state* parser, std::string_view key) -> in_context_base*
   {
     using namespace std::string_view_literals;
     if (key == "type"sv)
     {
-      read_variant_type(parser);
+      return read_variant_type(obj, parser);
     }
-    else if (key == "value"sv)
+    if (key == "value"sv)
     {
-      read_variant_value<std::variant_size_v<class_type>>(parser, xvalue_);
+      return read_variant_value(obj, parser, parser->get_stored_value());
     }
+
+    throw visitor_error(visitor_error::invalid_key);
   }
 
-  void read_variant_type(parser_state* parser)
+  template <typename TClassType>
+  static auto read_variant_type(TClassType& obj, parser_state* parser)
   {
-    auto mapping     = parser->template push<in_context_impl<std::string_view, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    auto mapping        = parser->template create<in_context_impl<std::string_view, Config>>();
+    mapping->post_init_ = [](in_context_base* mapping, parser_state* parser)
     {
       auto object              = static_cast<in_context_impl<std::string_view, Config>*>(mapping);
       object->parent_->xvalue_ = acl::index_transform<class_type>::to_index(object->get());
-      parser->pop(object, object->parent_);
     };
+    return mapping;
   }
 
-  template <std::size_t const I>
-  void read_variant_at(parser_state* parser)
+  template <typename TClassType, std::size_t const I>
+  static auto read_variant_at(TClassType& obj, parser_state* parser)
   {
-    using type = std::variant_alternative_t<I, class_type>;
+    using type = std::variant_alternative_t<I, TClassType>;
 
-    auto mapping     = parser->template push<in_context_impl<type, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    auto mapping        = parser->template create<in_context_impl<type, Config>>();
+    mapping->post_init_ = [](in_context_base* mapping, parser_state* parser)
     {
-      auto* object = static_cast<in_context_impl<type, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
+      auto object = static_cast<in_context_impl<type, Config>*>(mapping);
+      auto parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
       parent->get().template emplace<type>(std::move(object->get()));
-      parser->pop(object, parent);
     };
+    return mapping;
   }
 
-  template <std::size_t const N>
-  void read_variant_value(parser_state* parser, uint32_t i) noexcept
+  template <typename TClassType>
+  static auto read_variant_value(TClassType& obj, parser_state* parser, uint32_t i)
   {
+    in_context_base* ret = nullptr;
     [&]<std::size_t... I>(std::index_sequence<I...>)
     {
-      ((i == I ? read_variant_at<I>(parser) : void()), ...);
-    }(std::make_index_sequence<N>());
+      ((i == I ? (void)(ret = read_variant_at<TClassType, I>(obj, parser)) : void()), ...);
+    }(std::make_index_sequence<std::variant_size_v<TClassType>>());
+
+    if (ret == nullptr)
+    {
+      throw visitor_error(visitor_error::invalid_variant_type);
+    }
+    return ret;
+  }
+
+  auto read_tuple(parser_state* parser)
+  {
+    return read_tuple_value<std::tuple_size_v<class_type>>(parser, xvalue_++);
   }
 
   template <std::size_t I>
-  void read_tuple_element(parser_state* parser) noexcept
+  auto read_tuple_element(parser_state* parser) -> in_context_base*
   {
     using type = std::tuple_element_t<I, class_type>;
-
-    auto mapping     = parser->template push<in_context_impl<type, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
-    {
-      auto* object               = static_cast<in_context_impl<type, Config>*>(mapping);
-      auto  parent               = static_cast<in_context_impl<Class, Config>*>(object->parent_);
-      std::get<I>(parent->get()) = std::move(object->get());
-      parser->pop(object, parent);
-    };
+    return parser->template create<in_context_impl<type&, Config>>(std::get<I>(get()));
   }
 
   template <std::size_t const N>
-  void read_tuple_value(parser_state* parser, uint32_t i) noexcept
+  auto read_tuple_value(parser_state* parser, uint32_t i) -> in_context_base*
   {
+    in_context_base* ret = nullptr;
     [&]<std::size_t... I>(std::index_sequence<I...>)
     {
-      ((i == I ? read_tuple_element<I>(parser) : void()), ...);
+      ((i == I ? (void)(ret = read_tuple_element<I>(parser)) : void()), ...);
     }(std::make_index_sequence<N>());
+    return ret;
   }
 
-  void push_container_item(parser_state* parser)
+  auto push_container_item(parser_state* parser)
     requires(!ContainerHasEmplaceBack<class_type> && ContainerHasArrayValueAssignable<class_type>)
   {
-    auto mapping     = parser->template push<in_context_impl<array_value_type<class_type>, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    using type      = array_value_type<class_type>;
+    auto ret        = parser->template create<in_context_impl<type, Config>>();
+    ret->post_init_ = [](in_context_base* mapping, parser_state* parser)
     {
-      auto* object = static_cast<in_context_impl<array_value_type<class_type>, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
-      if (parent->xvalue_ < parent->get().size())
+      auto object = static_cast<in_context_impl<type, Config>*>(mapping);
+      auto parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
+      if (parent->xvalue_ < std::size(parent->get()))
       {
         parent->get()[parent->xvalue_++] = std::move(object->get());
       }
-      parser->pop(object, parent);
     };
+    return ret;
   }
 
-  void push_container_item(parser_state* parser)
+  auto push_container_item(parser_state* parser)
     requires(ContainerHasEmplaceBack<class_type>)
   {
-    auto mapping     = parser->template push<in_context_impl<typename class_type::value_type, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    using type      = array_value_type<class_type>;
+    auto ret        = parser->template create<in_context_impl<type, Config>>();
+    ret->post_init_ = [](in_context_base* mapping, parser_state* parser)
     {
-      auto* object = static_cast<in_context_impl<typename class_type::value_type, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
+      auto object = static_cast<in_context_impl<type, Config>*>(mapping);
+      auto parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
       parent->get().emplace_back(std::move(object->get()));
-      parser->pop(object, parent);
     };
+    return ret;
   }
 
-  void push_container_item(parser_state* parser)
+  auto push_container_item(parser_state* parser)
     requires(ContainerHasEmplace<class_type> && !MapLike<class_type>)
   {
-    using value_t    = typename class_type::value_type;
-    auto mapping     = parser->template push<in_context_impl<value_t, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    using type      = typename class_type::value_type;
+    auto ret        = parser->template create<in_context_impl<type, Config>>();
+    ret->post_init_ = [](in_context_base* mapping, parser_state* parser)
     {
-      auto* object = static_cast<in_context_impl<value_t, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
+      auto object = static_cast<in_context_impl<type, Config>*>(mapping);
+      auto parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
       parent->get().emplace(std::move(object->get()));
-      parser->pop(object, parent);
     };
+    return ret;
   }
 
-  void push_container_item(parser_state* parser)
+  auto push_container_item(parser_state* parser)
     requires(MapLike<class_type>)
   {
-    using value_t    = std::pair<typename class_type::key_type, typename class_type::mapped_type>;
-    auto mapping     = parser->template push<in_context_impl<value_t, Config>>(this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+    using type      = std::pair<typename class_type::key_type, typename class_type::mapped_type>;
+    auto ret        = parser->template create<in_context_impl<type, Config>>();
+    ret->post_init_ = [](in_context_base* mapping, parser_state* parser)
     {
-      auto* object = static_cast<in_context_impl<value_t, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
-      auto& pair   = object->get();
-      parent->get().emplace(std::move(pair.first), std::move(pair.second));
-      parser->pop(object, parent);
+      auto object = static_cast<in_context_impl<type, Config>*>(mapping);
+      auto parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
+      parent->get().emplace(std::move(object->get()));
     };
+    return ret;
   }
 
-  void read_string_map_value(parser_state* parser, std::string_view key)
+  template <typename Base, typename TClassType>
+  static auto read_explicitly_reflected(TClassType& obj, parser_state* parser, std::string_view key)
   {
-    obj_.key_        = key;
-    using value_t    = typename class_type::value_type;
-    auto mapping     = parser->template push<in_context_impl<value_t&, Config>>(obj_.value_, this);
-    mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
-    {
-      auto* object = static_cast<in_context_impl<value_t&, Config>*>(mapping);
-      auto  parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
-      parser->pop(object, parent);
-    };
-  }
-
-  void read_explicitly_reflected(parser_state* parser, std::string_view key)
-  {
+    using tclass_type    = std::decay_t<TClassType>;
+    in_context_base* ret = nullptr;
     for_each_field(
-     [&]<typename Decl>(class_type& obj, Decl const& decl, auto) noexcept
+     [&]<typename Decl>(tclass_type& obj, Decl const& decl, auto)
      {
        if (decl.key() == key)
        {
          using value_t = typename Decl::MemTy;
 
-         auto mapping     = parser->template push<in_context_impl<value_t, Config>>(this);
-         mapping->pop_fn_ = [](parser_state* parser, in_context_base* mapping)
+         ret             = parser->template create<in_context_impl<value_t, Config>>();
+         ret->post_init_ = [](in_context_base* mapping, parser_state* parser)
          {
            auto object = static_cast<in_context_impl<value_t, Config>*>(mapping);
-           auto parent = static_cast<in_context_impl<Class, Config>*>(object->parent_);
+           auto parent = static_cast<Base*>(object->parent_);
            Decl decl;
-           decl.value(parent->get(), std::move(object->get()));
-           parser->pop(object, parent);
+           if constexpr (PointerLike<typename Base::class_type> || OptionalLike<typename Base::class_type>)
+           {
+             decl.value(*parent->get(), std::move(object->get()));
+           }
+           else
+           {
+             decl.value(parent->get(), std::move(object->get()));
+           }
          };
        }
      },
-     obj_);
+     obj);
+
+    if (ret == nullptr)
+    {
+      throw visitor_error(visitor_error::invalid_key);
+    }
+
+    return ret;
   }
 
-  template <std::size_t I>
-  static void pop_aggregate_field(parser_state* parser, in_context_base* mapping)
+  template <typename Base, typename TClassType, std::size_t I>
+  static void post_init_aggregate(in_context_base* mapping, parser_state* parser)
   {
-    using type                      = field_type<I, class_type>;
-    auto object                     = static_cast<in_context_impl<type, Config>*>(mapping);
-    auto parent                     = static_cast<in_context_impl<class_type, Config>*>(object->parent_);
-    get_field_ref<I>(parent->get()) = std::move(object->get());
-    parser->pop(object, parent);
+    using type  = field_type<I, TClassType>;
+    auto object = static_cast<in_context_impl<type, Config>*>(mapping);
+    auto parent = static_cast<Base*>(object->parent_);
+    if constexpr (PointerLike<typename Base::class_type> || OptionalLike<typename Base::class_type>)
+    {
+      *get_field_ref<I>(parent->get()) = std::move(object->get());
+    }
+    else
+    {
+      get_field_ref<I>(parent->get()) = std::move(object->get());
+    }
   };
 
-  template <std::size_t I>
-  void read_aggregate_field(parser_state* parser, std::string_view field_key, auto const& field_names)
+  template <typename Base, typename TClassType, std::size_t I>
+  static auto read_aggregate_field(parser_state* parser, std::string_view field_key, auto const& field_names)
+   -> in_context_base*
   {
     if (std::get<I>(field_names) == field_key)
     {
-      using type       = field_type<I, class_type>;
-      auto mapping     = parser->template push<in_context_impl<type, Config>>(this);
-      mapping->pop_fn_ = &pop_aggregate_field<I>;
+      using type      = field_type<I, TClassType>;
+      auto ret        = parser->template create<in_context_impl<type, Config>>();
+      ret->post_init_ = &post_init_aggregate<Base, TClassType, I>;
+      return ret;
     }
+    return nullptr;
   }
 
-  void read_aggregate(parser_state* parser, std::string_view field_key)
+  template <typename Base, typename TClassType>
+  static auto read_aggregate(TClassType& obj, parser_state* parser, std::string_view field_key)
   {
-    constexpr auto field_names = get_field_names<class_type>();
+    using tclass_type            = std::decay_t<TClassType>;
+    constexpr auto   field_names = get_field_names<class_type>();
+    in_context_base* ret         = nullptr;
 
     [&]<std::size_t... I>(std::index_sequence<I...>, std::string_view key)
     {
-      (read_aggregate_field<I>(parser, key, field_names), ...);
+      ((ret || (ret = read_aggregate_field<Base, tclass_type, I>(parser, key, field_names))), ...);
     }(std::make_index_sequence<std::tuple_size_v<decltype(field_names)>>(), field_key);
+
+    if (ret == nullptr)
+    {
+      throw visitor_error(visitor_error::invalid_key);
+    }
+
+    return ret;
   }
 
 private:

@@ -1,11 +1,13 @@
 ﻿
 #include "acl/reflection/detail/base_concepts.hpp"
+#include "acl/reflection/visitor.hpp"
 #include <acl/serializers/lite_yml.hpp>
 #include <array>
 #include <catch2/catch_all.hpp>
 #include <map>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <tuple>
 #include <variant>
 #include <vector>
@@ -52,6 +54,28 @@ struct TestStruct2
                      acl::bind<"c", &TestStruct2::c>(), acl::bind<"d", &TestStruct2::d>());
   }
 };
+
+TEST_CASE("yaml_object: Test simple nested")
+{
+  struct aggregate
+  {
+    int value = -1;
+  };
+  struct instance
+  {
+    int       parent = -1;
+    aggregate child;
+  };
+  std::string yml = R"(
+parent: 100
+child:
+  value: 300
+)";
+  instance    ts;
+  acl::yml::from_string(ts, yml);
+  REQUIRE(ts.parent == 100);
+  REQUIRE(ts.child.value == 300);
+}
 
 TEST_CASE("yaml_object: Test read nested")
 {
@@ -413,7 +437,7 @@ list:
   };
 
   TestStructUnexpectedToken ts;
-  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), std::runtime_error);
+  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), acl::visitor_error);
 }
 
 TEST_CASE("yaml_object: Test read with missing key")
@@ -450,7 +474,7 @@ TEST_CASE("yaml_object: Test read with extra fields")
 a: 100
 b: 200
 c: "value"
-extra_field: "should be ignored"
+extra_field: "cause a crash"
 )";
 
   struct TestStructExtraField
@@ -467,11 +491,7 @@ extra_field: "should be ignored"
   };
 
   TestStructExtraField ts;
-  acl::yml::from_string(ts, yml);
-
-  REQUIRE(ts.a == 100);
-  REQUIRE(ts.b == 200);
-  REQUIRE(ts.c == "value");
+  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), acl::visitor_error);
 }
 
 TEST_CASE("yaml_object: Test read of unexpected type")
@@ -491,7 +511,7 @@ number: "not_a_number"
   };
 
   TestStructUnexpectedType ts;
-  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), std::runtime_error);
+  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), acl::visitor_error);
 }
 
 TEST_CASE("yaml_object: Test read recursive structures")
@@ -552,7 +572,7 @@ value: "string_instead_of_int"
   };
 
   TestStructTypeCast ts;
-  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), std::runtime_error);
+  REQUIRE_THROWS_AS(acl::yml::from_string(ts, yml), acl::visitor_error);
 }
 
 TEST_CASE("yaml_object: Test read with empty YAML")
@@ -713,10 +733,39 @@ level1:
     }
   };
 
-  Level1 ts;
+  struct Level0
+  {
+    Level1 level1;
+  };
+
+  Level0 ts;
   acl::yml::from_string(ts, yml);
 
-  REQUIRE(ts.level2.level3.level4.value == 42);
+  REQUIRE(ts.level1.level2.level3.level4.value == 42);
+}
+
+TEST_CASE("yaml_object: Test read sequence of maps with single key")
+{
+  std::string yml = R"(
+- name: "Item1"
+- name: "Item2"
+- name: "Item3"
+)";
+
+  struct Item
+  {
+    std::string name;
+  };
+
+  using ItemsList = std::vector<Item>;
+  ItemsList items;
+
+  acl::yml::from_string(items, yml);
+
+  REQUIRE(items.size() == 3);
+  REQUIRE(items[0].name == "Item1");
+  REQUIRE(items[1].name == "Item2");
+  REQUIRE(items[2].name == "Item3");
 }
 
 TEST_CASE("yaml_object: Test read sequence of maps")
